@@ -2,7 +2,7 @@
 
 **Open-Source Data Quality, Validation, and Reconciliation Platform**
 
-[![OpenDataGuard CI](https://github.com/placeholder-org/OpenDataGuard/actions/workflows/tests.yml/badge.svg)](https://github.com/placeholder-org/OpenDataGuard/actions)
+[![OpenDataGuard CI](https://github.com/RushikeshAlase7879/OpenDataGuard/actions/workflows/tests.yml/badge.svg)](https://github.com/RushikeshAlase7879/OpenDataGuard/actions)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -119,7 +119,7 @@ graph TD
 
 ### Step 1: Clone Repository
 ```bash
-git clone https://github.com/placeholder-org/OpenDataGuard.git
+git clone https://github.com/RushikeshAlase7879/OpenDataGuard.git
 cd OpenDataGuard
 ```
 

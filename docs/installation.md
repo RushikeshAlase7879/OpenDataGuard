@@ -17,7 +17,7 @@ This guide walks you through setting up **OpenDataGuard** locally for developmen
 
 ### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/<your-username>/OpenDataGuard.git
+git clone https://github.com/RushikeshAlase7879/OpenDataGuard.git
 cd OpenDataGuard
 ```
 
