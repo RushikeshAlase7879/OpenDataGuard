@@ -1,0 +1,190 @@
+"""Unit tests for OpenDataGuard validators and ingestion engine."""
+
+import io
+import pytest
+import pandas as pd
+import numpy as np
+from pathlib import Path
+
+from opendataguard.validators import (
+    load_dataset,
+    validate_file_safety,
+    read_csv_in_chunks,
+    check_missing_values,
+    check_duplicate_rows,
+    check_key_uniqueness,
+    check_data_types,
+    check_date_validity,
+    check_numeric_validity,
+    check_value_range,
+    check_string_length,
+    check_allowed_values,
+    check_schema_mismatch,
+    calculate_data_quality_score,
+)
+
+
+@pytest.fixture
+def sample_df():
+    return pd.DataFrame({
+        "id": [1, 2, 3, 4, 5],
+        "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
+        "age": [25, 30, 45, 12, 60],
+        "score": [85.5, 90.0, np.nan, 72.0, 99.5],
+        "status": ["ACTIVE", "ACTIVE", "INACTIVE", "PENDING", "ACTIVE"],
+        "joined": ["2023-01-01", "2023-02-15", "2023-03-20", "2023-04-10", "2023-05-01"],
+    })
+
+
+def test_load_dataset_csv_buffer():
+    csv_bytes = b"col1,col2\n1,alpha\n2,beta\n"
+    df, meta = load_dataset(io.BytesIO(csv_bytes), filename="test.csv")
+    assert len(df) == 2
+    assert meta.column_count == 2
+    assert meta.name == "test.csv"
+
+
+def test_load_dataset_excel_buffer(tmp_path):
+    df_orig = pd.DataFrame({"a": [10, 20], "b": ["x", "y"]})
+    excel_path = tmp_path / "test.xlsx"
+    df_orig.to_excel(excel_path, index=False)
+
+    df_loaded, meta = load_dataset(excel_path)
+    assert len(df_loaded) == 2
+    assert list(df_loaded.columns) == ["a", "b"]
+    assert meta.row_count == 2
+
+
+def test_load_dataset_empty_fails():
+    empty_bytes = b""
+    with pytest.raises(ValueError, match="completely empty"):
+        load_dataset(io.BytesIO(empty_bytes), filename="empty.csv")
+
+
+def test_load_dataset_oversized_fails():
+    content = b"col1,col2\n" + (b"1,2\n" * 100)
+    with pytest.raises(ValueError, match="exceeds maximum allowed limit"):
+        load_dataset(io.BytesIO(content), filename="large.csv", max_size_bytes=50)
+
+
+def test_load_dataset_unsupported_extension():
+    content = b"fake binary data"
+    with pytest.raises(ValueError, match="Unsupported file format"):
+        load_dataset(io.BytesIO(content), filename="malicious.exe")
+
+
+def test_missing_values_check(sample_df):
+    res_overall = check_missing_values(sample_df)
+    assert not res_overall.passed
+    assert res_overall.failed_records == 1  # 1 row contains NaN
+
+    res_col = check_missing_values(sample_df, column="score")
+    assert not res_col.passed
+    assert res_col.failed_records == 1
+
+    res_clean_col = check_missing_values(sample_df, column="name")
+    assert res_clean_col.passed
+    assert res_clean_col.failed_records == 0
+
+
+def test_duplicate_rows_check():
+    df_dups = pd.DataFrame({
+        "id": [1, 2, 2, 3],
+        "val": ["a", "b", "b", "c"],
+    })
+    res = check_duplicate_rows(df_dups)
+    assert not res.passed
+    assert res.failed_records == 2  # Two duplicate rows
+
+    df_clean = pd.DataFrame({"id": [1, 2, 3], "val": ["a", "b", "c"]})
+    assert check_duplicate_rows(df_clean).passed
+
+
+def test_key_uniqueness_check():
+    df = pd.DataFrame({
+        "id": [101, 102, 102, None],
+        "name": ["A", "B", "C", "D"],
+    })
+    res = check_key_uniqueness(df, key_columns="id")
+    assert not res.passed
+    assert res.failed_records == 3  # Two duplicate 102s + 1 null key
+
+
+def test_data_types_check(sample_df):
+    expected = {"id": "int", "name": "string", "score": "float"}
+    res = check_data_types(sample_df, expected_types=expected)
+    assert res.passed
+
+    # Intentionally bad expectation
+    bad_expected = {"name": "int"}
+    res_bad = check_data_types(sample_df, expected_types=bad_expected)
+    assert not res_bad.passed
+
+
+def test_date_validity_check():
+    df = pd.DataFrame({
+        "date_str": ["2023-01-01", "2023-02-29", "invalid-date", "1990-01-01"],
+    })
+    res = check_date_validity(df, column="date_str", min_date="2000-01-01")
+    assert not res.passed
+    assert res.failed_records >= 2  # 2023 is not leap year so 02-29 invalid, invalid-date, 1990 is < 2000
+
+
+def test_numeric_validity_check():
+    df = pd.DataFrame({
+        "num": [10, 20.5, "not-a-number", np.inf],
+    })
+    res = check_numeric_validity(df, column="num", allow_inf=False)
+    assert not res.passed
+    assert res.failed_records == 2  # "not-a-number" and np.inf
+
+
+def test_value_range_check(sample_df):
+    res = check_value_range(sample_df, column="age", min_value=18, max_value=65)
+    assert not res.passed
+    assert res.failed_records == 1  # 12 is < 18
+
+    res_pass = check_value_range(sample_df, column="age", min_value=0, max_value=100)
+    assert res_pass.passed
+
+
+def test_string_length_check(sample_df):
+    res = check_string_length(sample_df, column="name", min_length=2, max_length=5)
+    assert not res.passed
+    assert res.failed_records == 1  # "Charlie" is 7 chars
+
+    res_pass = check_string_length(sample_df, column="name", min_length=2, max_length=20)
+    assert res_pass.passed
+
+
+def test_allowed_values_check(sample_df):
+    res = check_allowed_values(sample_df, column="status", allowed_values=["ACTIVE", "INACTIVE"])
+    assert not res.passed
+    assert res.failed_records == 1  # "PENDING" not in set
+
+    res_pass = check_allowed_values(sample_df, column="status", allowed_values=["ACTIVE", "INACTIVE", "PENDING"])
+    assert res_pass.passed
+
+
+def test_schema_mismatch_check(sample_df):
+    res = check_schema_mismatch(sample_df, expected_columns=["id", "name", "missing_col"])
+    assert not res.passed
+    assert "missing_col" in res.message
+
+    res_pass = check_schema_mismatch(sample_df, expected_columns=["id", "name", "age"])
+    assert res_pass.passed
+
+
+def test_calculate_data_quality_score():
+    r1 = check_missing_values(pd.DataFrame({"a": [1, 2, 3, 4]}))  # 100%
+    r2 = check_missing_values(pd.DataFrame({"a": [1, None, 3, 4]}))  # 75%
+    score = calculate_data_quality_score([r1, r2])
+    assert score == 87.5
+
+
+def test_read_csv_in_chunks(tmp_path):
+    csv_file = tmp_path / "chunk_test.csv"
+    pd.DataFrame({"x": range(100)}).to_csv(csv_file, index=False)
+    chunks = list(read_csv_in_chunks(csv_file, chunksize=25))
+    assert len(chunks) == 4
+    assert sum(len(c) for c in chunks) == 100

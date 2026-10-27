@@ -1,0 +1,11 @@
+customer_id,username,email,age,status,balance,signup_date
+1001,alice_smith,alice@example.com,29,ACTIVE,1540.50,2023-01-15
+1002,bob_jones,,42,ACTIVE,230.00,2023-02-20
+1003,charlie_brown,charlie@example.com,17,PENDING,50.25,2023-03-10
+1005,eve_davis,eve@example.com,35,SUSPENDED,150.00,2023-05-18
+1006,frank_miller,frank@example.com,48,ACTIVE,120.75,2023-06-22
+1007,grace_hopper,grace@example.com,31,ACTIVE,450.00001,2023-07-01
+1008,heidi_clark,heidi@example.com,22,PENDING,15.50,2023-08-14
+1009,ivan_petrov,ivan@example.com,39,ACTIVE,890.10,2023-09-09
+1010,judy_garland,judy@example.com,45,ACTIVE,1250.00,2023-10-12
+1099,target_only_user,target_only@example.com,52,ACTIVE,900.00,2023-12-01

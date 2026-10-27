@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "Validation Rules for Customer Records",
+  "rules": [
+    {
+      "rule": "required",
+      "column": "customer_id",
+      "threshold_percent": 0.0
+    },
+    {
+      "rule": "required",
+      "column": "email",
+      "threshold_percent": 0.0
+    },
+    {
+      "rule": "unique",
+      "columns": ["customer_id"]
+    },
+    {
+      "rule": "duplicate_rows"
+    },
+    {
+      "rule": "range",
+      "column": "age",
+      "min": 18,
+      "max": 120
+    },
+    {
+      "rule": "allowed_values",
+      "column": "status",
+      "values": ["ACTIVE", "INACTIVE", "PENDING"]
+    },
+    {
+      "rule": "date_format",
+      "column": "signup_date",
+      "format": "%Y-%m-%d"
+    },
+    {
+      "rule": "schema",
+      "expected_columns": [
+        "customer_id",
+        "username",
+        "email",
+        "age",
+        "status",
+        "balance",
+        "signup_date"
+      ],
+      "strict": false
+    }
+  ]
+}
