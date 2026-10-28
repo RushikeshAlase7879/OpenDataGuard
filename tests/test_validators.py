@@ -19,6 +19,8 @@ from opendataguard.validators import (
     check_value_range,
     check_string_length,
     check_allowed_values,
+    check_regex_pattern,
+    check_email_format,
     check_schema_mismatch,
     calculate_data_quality_score,
 )
@@ -188,3 +190,106 @@ def test_read_csv_in_chunks(tmp_path):
     chunks = list(read_csv_in_chunks(csv_file, chunksize=25))
     assert len(chunks) == 4
     assert sum(len(c) for c in chunks) == 100
+
+
+def test_regex_pattern_check():
+    df = pd.DataFrame({"code": ["AB-12", "CD-34", "INVALID", None]})
+    res = check_regex_pattern(df, column="code", pattern=r"^[A-Z]{2}-\d{2}$")
+    assert not res.passed
+    assert res.failed_records == 1  # "INVALID" fails, None is ignored
+
+    res_all_valid = check_regex_pattern(
+        pd.DataFrame({"code": ["AB-12", "CD-34"]}),
+        column="code",
+        pattern=r"^[A-Z]{2}-\d{2}$",
+    )
+    assert res_all_valid.passed
+
+
+def test_email_format_check():
+    df = pd.DataFrame({
+        "email": [
+            "valid.user@example.com",
+            "support@domain.org",
+            "not-an-email",
+            "@missing-local.com",
+            "user@nodomain",
+            None,
+        ]
+    })
+    res = check_email_format(df, column="email")
+    assert not res.passed
+    assert res.failed_records == 3  # not-an-email, @missing-local.com, user@nodomain
+    assert "email_format" == res.check_name
+
+    df_clean = pd.DataFrame({"email": ["alice@work.co", "bob123@sub.domain.edu"]})
+    res_clean = check_email_format(df_clean, column="email")
+    assert res_clean.passed
+    assert res_clean.failed_records == 0
+
+
+def test_valid_dataset_passes_all_checks():
+    df_clean = pd.DataFrame({
+        "id": [1, 2, 3],
+        "email": ["a@test.com", "b@test.com", "c@test.com"],
+        "age": [25, 30, 35],
+        "status": ["ACTIVE", "PENDING", "ACTIVE"],
+        "signup": ["2023-01-01", "2023-02-01", "2023-03-01"],
+    })
+    assert check_missing_values(df_clean).passed
+    assert check_duplicate_rows(df_clean).passed
+    assert check_key_uniqueness(df_clean, key_columns="id").passed
+    assert check_data_types(df_clean, expected_types={"id": "int", "age": "int"}).passed
+    assert check_value_range(df_clean, column="age", min_value=18, max_value=65).passed
+    assert check_email_format(df_clean, column="email").passed
+    assert check_date_validity(df_clean, column="signup").passed
+    assert check_allowed_values(df_clean, column="status", allowed_values=["ACTIVE", "PENDING"]).passed
+
+
+def test_empty_dataframe_validator_handling():
+    empty_df = pd.DataFrame(columns=["id", "name", "val"])
+    # All checks should handle 0 rows gracefully without unhandled exceptions
+    assert check_missing_values(empty_df).passed
+    assert check_duplicate_rows(empty_df).passed
+    assert check_key_uniqueness(empty_df, key_columns="id").passed
+    assert check_data_types(empty_df, expected_types={"id": "int"}).passed
+    assert check_value_range(empty_df, column="val", min_value=0, max_value=100).passed
+    assert check_email_format(empty_df, column="name").passed
+    assert check_date_validity(empty_df, column="name").passed
+
+
+def test_missing_column_across_validators():
+    df = pd.DataFrame({"existing_col": [1, 2, 3]})
+    # When a non-existent column is passed, validators return passed=False with an informative message
+    r1 = check_missing_values(df, column="non_existent")
+    assert not r1.passed
+    assert "does not exist" in r1.message
+
+    r2 = check_key_uniqueness(df, key_columns="non_existent")
+    assert not r2.passed
+    assert "not found" in r2.message
+
+    r3 = check_value_range(df, column="non_existent", min_value=0)
+    assert not r3.passed
+    assert "not found" in r3.message
+
+    r4 = check_string_length(df, column="non_existent", min_length=1)
+    assert not r4.passed
+    assert "not found" in r4.message
+
+    r5 = check_allowed_values(df, column="non_existent", allowed_values=["A"])
+    assert not r5.passed
+    assert "not found" in r5.message
+
+    r6 = check_date_validity(df, column="non_existent")
+    assert not r6.passed
+    assert "not found" in r6.message
+
+    r7 = check_numeric_validity(df, column="non_existent")
+    assert not r7.passed
+    assert "not found" in r7.message
+
+    r8 = check_regex_pattern(df, column="non_existent", pattern=r"^\d+$")
+    assert not r8.passed
+    assert "not found" in r8.message
+

@@ -90,3 +90,58 @@ def test_execute_rule_suite(sample_df):
     # Rule 3 (allowed_values) should FAIL on 'Z'
     assert not results[3].passed
     assert results[3].failed_records == 1
+
+
+def test_email_rule_suite():
+    df = pd.DataFrame({"contact": ["good@test.com", "bad-email"]})
+    config = {
+        "rules": [
+            {"rule": "email", "column": "contact"}
+        ]
+    }
+    results = execute_rule_suite(df, config)
+    assert len(results) == 1
+    assert not results[0].passed
+    assert results[0].failed_records == 1
+    assert results[0].check_name == "email_format"
+
+
+def test_invalid_regex_pattern_rejected():
+    bad_config = {
+        "rules": [
+            {"rule": "regex", "column": "email", "pattern": "[invalid(regex"}
+        ]
+    }
+    with pytest.raises(ValueError, match="Invalid regex pattern"):
+        validate_rule_config(bad_config)
+
+
+def test_load_rules_from_path(tmp_path):
+    rule_file = tmp_path / "custom_rules.json"
+    rule_file.write_text('{"version": "1.0", "rules": [{"rule": "duplicate_rows"}]}', encoding="utf-8")
+    config = load_rules(rule_file)
+    assert len(config["rules"]) == 1
+    assert config["rules"][0]["rule"] == "duplicate_rows"
+
+
+def test_load_rules_nonexistent_path(tmp_path):
+    missing_file = tmp_path / "nonexistent.yaml"
+    with pytest.raises(FileNotFoundError, match="Rule file does not exist"):
+        load_rules(missing_file)
+
+
+def test_load_repo_sample_rules():
+    from pathlib import Path
+    repo_root = Path(__file__).parent.parent
+    json_path = repo_root / "config" / "sample_rules.json"
+    yaml_path = repo_root / "config" / "sample_rules.yaml"
+
+    if json_path.is_file():
+        cfg_json = load_rules(json_path)
+        assert len(cfg_json["rules"]) >= 8
+
+    if yaml_path.is_file():
+        cfg_yaml = load_rules(yaml_path)
+        assert len(cfg_yaml["rules"]) >= 8
+
+

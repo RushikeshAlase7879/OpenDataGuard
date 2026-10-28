@@ -50,9 +50,11 @@ from opendataguard.validators import (
     check_data_types,
     check_date_validity,
     check_duplicate_rows,
+    check_email_format,
     check_key_uniqueness,
     check_missing_values,
     check_numeric_validity,
+    check_regex_pattern,
     check_schema_mismatch,
     check_string_length,
     check_value_range,
@@ -342,6 +344,9 @@ elif navigation == "🛡️ Data Quality Validation":
                 run_date_check = st.checkbox("Date Validity Check", value=False)
                 date_col = st.selectbox("Date Column:", options=list(current_df.columns), key="date_col")
 
+                run_email_check = st.checkbox("Email Format Validity Check", value=False)
+                email_col = st.selectbox("Email Column:", options=list(current_df.columns), key="email_col")
+
             if st.button("🚀 Run Selected Interactive Checks", type="primary"):
                 with st.spinner("Executing quality checks..."):
                     if run_null_check:
@@ -369,6 +374,9 @@ elif navigation == "🛡️ Data Quality Validation":
 
                     if run_date_check and date_col:
                         results.append(check_date_validity(current_df, column=date_col))
+
+                    if run_email_check and email_col:
+                        results.append(check_email_format(current_df, column=email_col))
 
         with tab_rules:
             st.markdown("Upload a version-controlled JSON or YAML validation rules file:")
@@ -743,7 +751,7 @@ elif navigation == "🗄️ SQL Database Validation":
 # ============================================================================
 elif navigation == "📜 Validation History":
     st.subheader("📜 Validation Execution History")
-    st.caption("Immutable local audit trail of historical validation runs.")
+    st.caption("Persistent local SQLite audit ledger of historical validation runs.")
 
     history_df = history_mgr.get_history(limit=100)
 

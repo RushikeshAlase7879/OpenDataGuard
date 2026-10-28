@@ -87,3 +87,25 @@ def test_invalid_table_name_rejected(sqlite_engine):
 
     with pytest.raises(ValueError, match="not found"):
         get_table_row_count(sqlite_engine, "non_existent_table")
+
+
+def test_destructive_sql_table_name_rejected(sqlite_engine):
+    destructive_payloads = [
+        "DROP TABLE test_users;--",
+        "test_users; DELETE FROM test_users;",
+        "SELECT * FROM test_users",
+    ]
+    for payload in destructive_payloads:
+        with pytest.raises(ValueError):
+            inspect_table_schema(sqlite_engine, payload)
+        with pytest.raises(ValueError):
+            get_table_row_count(sqlite_engine, payload)
+        with pytest.raises(ValueError):
+            fetch_table_sample(sqlite_engine, payload)
+
+
+def test_table_sample_bounded_limit(sqlite_engine):
+    # Verify limit parameter enforces bounded result
+    df = fetch_table_sample(sqlite_engine, "test_users", limit=1)
+    assert len(df) == 1
+

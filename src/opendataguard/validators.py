@@ -859,6 +859,104 @@ def check_schema_mismatch(
     )
 
 
+DEFAULT_EMAIL_REGEX = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+
+
+def check_regex_pattern(
+    df: pd.DataFrame,
+    column: str,
+    pattern: str,
+    max_samples: int = 10,
+) -> ValidationResult:
+    """Validate that text values in a column match a regular expression pattern.
+
+    Null values are ignored (checked separately by missing_values).
+
+    Args:
+        df: Input DataFrame.
+        column: Column name to validate.
+        pattern: Regular expression pattern string.
+        max_samples: Maximum failing samples to capture.
+
+    Returns:
+        ValidationResult.
+    """
+    total = len(df)
+    if column not in df.columns:
+        return ValidationResult("regex_pattern", column, total, 0, False, f"Column '{column}' not found.")
+
+    try:
+        pat = re.compile(pattern)
+    except re.error as err:
+        return ValidationResult("regex_pattern", column, total, 0, False, f"Invalid regex pattern '{pattern}': {err}")
+
+    non_null_mask = ~df[column].isna()
+    if not non_null_mask.any():
+        return ValidationResult(
+            check_name="regex_pattern",
+            column_name=column,
+            total_records=total,
+            failed_records=0,
+            passed=True,
+            message=f"No non-null records to evaluate for pattern in '{column}'.",
+            details={"pattern": pattern},
+        )
+
+    series_str = df.loc[non_null_mask, column].astype(str)
+    matches = series_str.apply(lambda v: bool(pat.search(v)))
+    fail_mask = pd.Series(False, index=df.index)
+    fail_mask.loc[series_str[~matches].index] = True
+
+    failed_cnt = int(fail_mask.sum())
+    passed = failed_cnt == 0
+
+    msg = (
+        f"All records in '{column}' match pattern '{pattern}'."
+        if passed
+        else f"Found {failed_cnt} records in '{column}' not matching pattern '{pattern}'."
+    )
+
+    return ValidationResult(
+        check_name="regex_pattern",
+        column_name=column,
+        total_records=total,
+        failed_records=failed_cnt,
+        passed=passed,
+        message=msg,
+        failing_sample=_extract_sample(df, fail_mask, max_samples),
+        details={"pattern": pattern},
+    )
+
+
+def check_email_format(
+    df: pd.DataFrame,
+    column: str,
+    pattern: str = DEFAULT_EMAIL_REGEX,
+    max_samples: int = 10,
+) -> ValidationResult:
+    """Validate that text values in a column conform to valid email syntax.
+
+    Null values are ignored (checked separately by missing_values).
+
+    Args:
+        df: Input DataFrame.
+        column: Column name containing email addresses.
+        pattern: Regular expression pattern for email validation.
+        max_samples: Maximum failing samples to capture.
+
+    Returns:
+        ValidationResult.
+    """
+    res = check_regex_pattern(df, column=column, pattern=pattern, max_samples=max_samples)
+    res.check_name = "email_format"
+    if not res.passed:
+        if f"Column '{column}' not found" not in res.message and "Invalid regex" not in res.message:
+            res.message = f"Column '{column}' contains {res.failed_records} invalid email address(es)."
+    else:
+        res.message = f"All non-null email addresses in '{column}' conform to valid format."
+    return res
+
+
 # ============================================================================
 # Data Quality Score Calculation
 # ============================================================================

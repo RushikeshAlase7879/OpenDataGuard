@@ -31,6 +31,10 @@
       "values": ["ACTIVE", "INACTIVE", "PENDING"]
     },
     {
+      "rule": "email",
+      "column": "email"
+    },
+    {
       "rule": "date_format",
       "column": "signup_date",
       "format": "%Y-%m-%d"

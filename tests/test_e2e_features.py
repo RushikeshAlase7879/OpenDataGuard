@@ -42,7 +42,8 @@ def test_end_to_end_core_workflows(tmp_path):
     rules = load_rules(rules_path)
     results = execute_rule_suite(df_src, rules)
     score = calculate_data_quality_score(results)
-    assert len(results) == 8
+    assert len(results) == len(rules["rules"])
+    assert len(results) >= 8
     assert 0.0 < score < 100.0  # Intentional defects exist in sample_source.csv
 
     # 3. Dataset Reconciliation
@@ -87,4 +88,4 @@ def test_end_to_end_core_workflows(tmp_path):
     assert len(history_df) == 1
     run_details = hist_mgr.get_run_details(run_id)
     assert run_details["dataset_name"] == "sample_source.csv"
-    assert run_details["total_checks"] == 8
+    assert run_details["total_checks"] == len(results)

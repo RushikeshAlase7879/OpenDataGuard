@@ -31,17 +31,25 @@ OpenDataGuard solves these problems with a 100% local, safe, open-source engine 
 
 ## 3. Key Features
 
-- **🛡️ 10 Configurable Data Quality Checks**:
-  1. Missing / null value detection with threshold tolerance.
-  2. Full row and subset duplicate detection.
-  3. Unique key and null key integrity enforcement.
-  4. Data type conformity (integer, float, date, boolean, text).
-  5. Date validity and chronological range bounding.
-  6. Numeric validity with NaN and infinity guards.
-  7. Min/max numeric range limits.
-  8. String length boundaries (min/max character count).
-  9. Categorical domain membership (allowed values).
-  10. Schema and column mismatch detection (missing and unexpected columns).
+- **🛡️ 12 Configurable Data Quality Checks**:
+  1. Missing / null value detection with threshold tolerance (`check_missing_values`).
+  2. Full row and subset duplicate detection (`check_duplicate_rows`).
+  3. Unique key and null key integrity enforcement (`check_key_uniqueness`).
+  4. Data type conformity: integer, float, date, boolean, text (`check_data_types`).
+  5. Date validity and chronological range bounding (`check_date_validity`).
+  6. Numeric validity with NaN and infinity guards (`check_numeric_validity`).
+  7. Min/max numeric range limits (`check_value_range`).
+  8. String length boundaries: min/max character count (`check_string_length`).
+  9. Categorical domain membership: allowed values (`check_allowed_values`).
+  10. Schema and column mismatch detection: missing/unexpected columns (`check_schema_mismatch`).
+  11. Regular expression pattern matching (`check_regex_pattern`).
+  12. Email format validation (`check_email_format`).
+
+- **📁 Supported File Formats**:
+  - **CSV** (`.csv`): Supported with automatic encoding fallback (`utf-8`, `utf-8-sig`, `latin1`, `cp1252`, `iso-8859-1`).
+  - **TSV / Delimited Text** (`.tsv`, `.txt`): Tab- and comma-delimited text files.
+  - **Excel** (`.xlsx`, `.xls`): Parsed safely via OpenPyXL without executing macros or scripts.
+  - **Chunked CSV Reading**: Bounded memory stream via `read_csv_in_chunks` for large files.
 
 - **📈 Continuous Data Quality Score (0.0% – 100.0%)**:
   - Deterministic scoring computed across all executed assertions:
@@ -168,7 +176,7 @@ Open your browser at `http://localhost:8501`.
 
 ## 8. Automated Testing
 
-Run the comprehensive automated test suite (42 unit and integration tests covering all modules):
+Run the comprehensive automated test suite (60 unit and integration tests covering all modules):
 
 ```bash
 # Using the test runner script:
@@ -213,7 +221,91 @@ print(f"Mismatches: {rec.summary.mismatched_records}")
 
 ---
 
-## 10. Sample Datasets Walkthrough
+## 10. Example Validation Rules (JSON & YAML)
+
+Validation suites can be authored as declarative JSON or YAML files and checked into version control:
+
+### JSON Configuration (`config/sample_rules.json`)
+```json
+{
+  "version": "1.0",
+  "description": "Validation Rules for Customer Records",
+  "rules": [
+    { "rule": "required", "column": "customer_id", "threshold_percent": 0.0 },
+    { "rule": "required", "column": "email", "threshold_percent": 0.0 },
+    { "rule": "unique", "columns": ["customer_id"] },
+    { "rule": "duplicate_rows" },
+    { "rule": "range", "column": "age", "min": 18, "max": 120 },
+    { "rule": "allowed_values", "column": "status", "values": ["ACTIVE", "INACTIVE", "PENDING"] },
+    { "rule": "email", "column": "email" },
+    { "rule": "regex", "column": "username", "pattern": "^[a-zA-Z0-9_]{3,30}$" },
+    { "rule": "date_format", "column": "signup_date", "format": "%Y-%m-%d" },
+    {
+      "rule": "schema",
+      "expected_columns": ["customer_id", "username", "email", "age", "status", "balance", "signup_date"],
+      "strict": false
+    }
+  ]
+}
+```
+
+### YAML Configuration (`config/sample_rules.yaml`)
+```yaml
+version: "1.0"
+description: "Validation Rules for Customer Records"
+rules:
+  - rule: required
+    column: customer_id
+    threshold_percent: 0.0
+
+  - rule: required
+    column: email
+    threshold_percent: 0.0
+
+  - rule: unique
+    columns:
+      - customer_id
+
+  - rule: duplicate_rows
+
+  - rule: range
+    column: age
+    min: 18
+    max: 120
+
+  - rule: allowed_values
+    column: status
+    values:
+      - ACTIVE
+      - INACTIVE
+      - PENDING
+
+  - rule: email
+    column: email
+
+  - rule: regex
+    column: username
+    pattern: "^[a-zA-Z0-9_]{3,30}$"
+
+  - rule: date_format
+    column: signup_date
+    format: "%Y-%m-%d"
+
+  - rule: schema
+    expected_columns:
+      - customer_id
+      - username
+      - email
+      - age
+      - status
+      - balance
+      - signup_date
+    strict: false
+```
+
+---
+
+## 11. Sample Datasets Walkthrough
 
 Synthetic datasets are pre-packaged in `examples/`:
 - `sample_source.csv`: Contains intentional edge cases (duplicate customer ID 1001, null email, out-of-bounds age 250, invalid date format, invalid categorical status).
@@ -224,25 +316,34 @@ See [examples/README.md](examples/README.md) for full descriptions.
 
 ---
 
-## 11. Security and Privacy Safeguards
+## 12. Security and Privacy Safeguards
 
-- **Local Execution**: Datasets never leave your computer.
-- **Read-Only Database Auditing**: SQL operations are strictly read-only inspection.
-- **Credential Protection**: Connection URI secrets and passwords are systematically masked and never logged.
-- **Arbitrary SQL Execution Prohibited**: Arbitrary queries supplied by uploads are rejected.
-- **Untrusted Input Handling**: File extensions and sizes (max 100MB default) are strictly validated.
-
----
-
-## 12. Known Limitations
-
-- **In-Memory Operations**: Datasets are loaded into pandas DataFrames. For single files larger than available RAM, use the chunked reader helper (`read_csv_in_chunks`).
-- **PostgreSQL Requirement**: PostgreSQL connections require the optional `psycopg2-binary` driver.
-- **Complex Hierarchical Structures**: Nested JSON objects in columns should be flattened prior to tabular column-level assertions.
+- **100% Local In-Memory Execution**: Uploaded datasets are held only in local memory during your active session; data is never transmitted to external cloud services or telemetry endpoints.
+- **Strict Read-Only Database Auditing**: SQL inspections run exclusively safe schema discovery (`inspect()`) and bounded `SELECT` queries. Destructive statements (`DROP`, `ALTER`, `TRUNCATE`, `DELETE`, `UPDATE`, `INSERT`) are prohibited and blocked before submission.
+- **Systematic Credential Masking**: Passwords and secret connection strings in database URIs are automatically redacted (`***`) by `SanitizingFilter` across all application logs and UI views.
+- **Untrusted File Hardening**: File sizes are capped by default (100MB threshold), and unsupported extensions are rejected before ingestion. Excel files are parsed securely via OpenPyXL without VBA macro or external script execution.
+- **Persistent Local Audit History (Non-Immutable)**: Historical run metrics (rule counts, score, execution timestamps) are recorded locally in SQLite (`~/.opendataguard/history.db`). Raw data rows are never stored in history. Note that while this audit history persists across application and server restarts, it is user-clearable and not cryptographically immutable.
 
 ---
 
-## 13. Project Structure
+## 13. Database Support & Limitations
+
+- **SQLite**: Fully supported and verified out-of-the-box for both file-based databases (`sqlite:///path/to/db.sqlite`) and in-memory test databases (`sqlite:///:memory:`).
+- **PostgreSQL**: Architecturally supported via SQLAlchemy connection strings (`postgresql+psycopg2://...`), but requires installing the optional `psycopg2-binary` driver (`pip install -e .[postgres]`).
+  > **Verification Status**: PostgreSQL connection handling and fallback error logic have been tested via mocks and driver checks. However, **PostgreSQL has NOT been tested against an active live PostgreSQL server** in this verification environment because no live server instance was provisioned.
+- **Schema & Table Restrictions**: Only existing tables/views can be sampled. Multi-table relational joins and custom SQL execution queries are restricted to preserve database safety and prevent unintended I/O load.
+
+---
+
+## 14. Known Limitations & Issues
+
+- **Memory Ceiling for Monolithic DataFrames**: Like standard pandas workloads, large datasets (> 1-2 GB) may encounter memory limits if loaded in full. For high-volume CSV files, use the provided chunked reader utility (`read_csv_in_chunks`).
+- **Composite Key Type Conversions**: Mixed-type composite reconciliation keys (e.g., matching integer `1` with string `"1"`) require explicit type casting before diffing to avoid false key mismatches.
+- **Nested / Semi-Structured Objects**: Hierarchical JSON or dictionary payloads inside individual column cells must be flattened into tabular columns before running column-specific assertions.
+
+---
+
+## 15. Project Structure
 
 ```
 OpenDataGuard/
@@ -261,7 +362,8 @@ OpenDataGuard/
 │   └── workflows/
 │       └── tests.yml           # Multi-OS Automated CI/CD
 ├── config/
-│   └── sample_rules.json       # Example declarative validation rules
+│   ├── sample_rules.json       # Example declarative validation rules (JSON)
+│   └── sample_rules.yaml       # Example declarative validation rules (YAML)
 ├── docs/
 │   ├── architecture.md         # Architecture & module breakdown
 │   ├── installation.md         # Detailed setup instructions
@@ -297,6 +399,6 @@ OpenDataGuard/
 
 ---
 
-## 14. License
+## 16. License
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.

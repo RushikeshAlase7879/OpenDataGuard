@@ -23,9 +23,11 @@ from opendataguard.validators import (
     check_data_types,
     check_date_validity,
     check_duplicate_rows,
+    check_email_format,
     check_key_uniqueness,
     check_missing_values,
     check_numeric_validity,
+    check_regex_pattern,
     check_schema_mismatch,
     check_string_length,
     check_value_range,
@@ -46,6 +48,7 @@ SUPPORTED_RULES = {
     "date_format",
     "date_range",
     "regex",
+    "email",
     "schema",
     "duplicate_rows",
 }
@@ -136,15 +139,27 @@ def load_rules(file_or_string: Union[str, Path, Dict[str, Any]]) -> Dict[str, An
         return file_or_string
 
     content_str = ""
-    # Check if input is a valid file path
-    potential_path = Path(file_or_string) if isinstance(file_or_string, (str, Path)) else None
-    if potential_path and potential_path.is_file():
+    # Check if input is a Path or a path-like string
+    if isinstance(file_or_string, Path):
+        if not file_or_string.is_file():
+            raise FileNotFoundError(f"Rule file does not exist at '{file_or_string}'")
         try:
-            content_str = potential_path.read_text(encoding="utf-8")
+            content_str = file_or_string.read_text(encoding="utf-8")
         except Exception as err:
-            raise ValueError(f"Failed to read rule file at '{potential_path}': {err}") from err
+            raise ValueError(f"Failed to read rule file at '{file_or_string}': {err}") from err
     elif isinstance(file_or_string, str):
-        content_str = file_or_string
+        # Check if the string refers to an existing file on disk
+        is_file_on_disk = False
+        try:
+            potential_p = Path(file_or_string)
+            if potential_p.is_file():
+                is_file_on_disk = True
+                content_str = potential_p.read_text(encoding="utf-8")
+        except Exception:
+            is_file_on_disk = False
+
+        if not is_file_on_disk:
+            content_str = file_or_string
     else:
         raise ValueError(f"Unsupported rules input type: {type(file_or_string).__name__}")
 
@@ -255,35 +270,14 @@ def execute_rule(df: pd.DataFrame, rule_def: Dict[str, Any]) -> List[ValidationR
 
     elif rule_type == "regex":
         pattern_str = rule_def["pattern"]
-        if col not in df.columns:
-            results.append(
-                ValidationResult("regex", col, len(df), 0, False, f"Column '{col}' not found.")
-            )
-        else:
-            pat = re.compile(pattern_str)
-            non_null = ~df[col].isna()
-            series_str = df.loc[non_null, col].astype(str)
-            matches = series_str.apply(lambda v: bool(pat.search(v)))
-            fail_mask = pd.Series(False, index=df.index)
-            fail_mask.loc[series_str[~matches].index] = True
+        results.append(check_regex_pattern(df, column=col, pattern=pattern_str))
 
-            failed_cnt = int(fail_mask.sum())
-            results.append(
-                ValidationResult(
-                    check_name="regex_pattern",
-                    column_name=col,
-                    total_records=len(df),
-                    failed_records=failed_cnt,
-                    passed=failed_cnt == 0,
-                    message=(
-                        f"All records in '{col}' match pattern '{pattern_str}'."
-                        if failed_cnt == 0
-                        else f"Found {failed_cnt} records in '{col}' not matching pattern '{pattern_str}'."
-                    ),
-                    failing_sample=_extract_sample(df, fail_mask),
-                    details={"pattern": pattern_str},
-                )
-            )
+    elif rule_type == "email":
+        custom_pat = rule_def.get("pattern")
+        if custom_pat:
+            results.append(check_email_format(df, column=col, pattern=custom_pat))
+        else:
+            results.append(check_email_format(df, column=col))
 
     elif rule_type == "schema":
         expected = rule_def.get("expected_columns", [])

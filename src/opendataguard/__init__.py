@@ -28,6 +28,7 @@ from opendataguard.rules import (
     validate_rule_config,
 )
 from opendataguard.validators import (
+    DEFAULT_EMAIL_REGEX,
     DatasetMetadata,
     ValidationResult,
     calculate_data_quality_score,
@@ -35,9 +36,11 @@ from opendataguard.validators import (
     check_data_types,
     check_date_validity,
     check_duplicate_rows,
+    check_email_format,
     check_key_uniqueness,
     check_missing_values,
     check_numeric_validity,
+    check_regex_pattern,
     check_schema_mismatch,
     check_string_length,
     check_value_range,
@@ -55,6 +58,7 @@ __all__ = [
     "ReconciliationResult",
     "DatabaseConfig",
     "HistoryManager",
+    "DEFAULT_EMAIL_REGEX",
     # Ingestion
     "load_dataset",
     "validate_file_safety",
@@ -69,6 +73,8 @@ __all__ = [
     "check_value_range",
     "check_string_length",
     "check_allowed_values",
+    "check_regex_pattern",
+    "check_email_format",
     "check_schema_mismatch",
     "calculate_data_quality_score",
     # Reconciliation

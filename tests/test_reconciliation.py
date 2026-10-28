@@ -88,3 +88,47 @@ def test_reconciliation_missing_key_column_raises():
 
     with pytest.raises(ValueError, match="Key column.*missing"):
         reconcile_datasets(df_src, df_tgt, key_columns="id")
+
+
+def test_reconciliation_empty_source_dataset():
+    empty_src = pd.DataFrame(columns=["id", "name"])
+    tgt = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
+    res = reconcile_datasets(empty_src, tgt, key_columns="id")
+    assert res.summary.source_rows == 0
+    assert res.summary.target_rows == 2
+    assert res.summary.target_only_records == 2
+    assert res.summary.source_only_records == 0
+    assert res.summary.matched_records == 0
+
+
+def test_reconciliation_empty_target_dataset():
+    src = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
+    empty_tgt = pd.DataFrame(columns=["id", "name"])
+    res = reconcile_datasets(src, empty_tgt, key_columns="id")
+    assert res.summary.source_rows == 2
+    assert res.summary.target_rows == 0
+    assert res.summary.source_only_records == 2
+    assert res.summary.target_only_records == 0
+    assert res.summary.matched_records == 0
+
+
+def test_reconciliation_both_empty_datasets():
+    empty_src = pd.DataFrame(columns=["id", "name"])
+    empty_tgt = pd.DataFrame(columns=["id", "name"])
+    res = reconcile_datasets(empty_src, empty_tgt, key_columns="id")
+    assert res.summary.source_rows == 0
+    assert res.summary.target_rows == 0
+    assert res.summary.matched_records == 0
+    assert res.summary.match_rate_percent == 100.0
+
+
+def test_reconciliation_composite_keys():
+    df1 = pd.DataFrame({"k1": [1, 2], "k2": ["x", "y"], "val": [10, 20]})
+    df2 = pd.DataFrame({"k1": [1, 2], "k2": ["x", "y"], "val": [10, 99]})
+    res = reconcile_datasets(df1, df2, key_columns=["k1", "k2"])
+    assert res.summary.matched_records == 1
+    assert res.summary.mismatched_records == 1
+    assert len(res.mismatched_df) == 1
+    assert res.mismatched_df.iloc[0]["source_value"] == 20
+    assert res.mismatched_df.iloc[0]["target_value"] == 99
+
