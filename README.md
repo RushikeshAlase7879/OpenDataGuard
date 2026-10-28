@@ -2,88 +2,90 @@
 
 **Open-Source Data Quality, Validation, and Reconciliation Platform**
 
+[![PyPI version](https://img.shields.io/pypi/v/opendataguard.svg)](https://pypi.org/project/opendataguard/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/opendataguard.svg)](https://pypi.org/project/opendataguard/)
 [![OpenDataGuard CI](https://github.com/RushikeshAlase7879/OpenDataGuard/actions/workflows/tests.yml/badge.svg)](https://github.com/RushikeshAlase7879/OpenDataGuard/actions)
-[![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+[PyPI Package](https://pypi.org/project/opendataguard/) • [GitHub Repository](https://github.com/RushikeshAlase7879/OpenDataGuard) • [Issue Tracker](https://github.com/RushikeshAlase7879/OpenDataGuard/issues) • [Documentation](docs/)
 
 ---
 
 ## 1. Overview
 
-**OpenDataGuard** is a production-minded, open-source Python platform designed to help data analysts, analytics engineers, data engineers, and developers validate tabular datasets, assert data quality constraints, detect silent corruptions, perform rigorous dataset reconciliations, and inspect SQL database tables without vendor lock-in, proprietary cloud dependencies, or paid APIs.
+**OpenDataGuard** is a production-minded, open-source Python platform designed to help data analysts, analytics engineers, data engineers, and developers validate tabular datasets, assert data quality constraints, detect silent corruptions, perform rigorous dataset reconciliations, and inspect SQL database tables.
 
-Whether running in an automated ETL CI/CD pipeline or as an interactive local web app, OpenDataGuard gives teams full visibility and confidence into their data.
+It is 100% open-source, local-first, and operates without vendor lock-in, proprietary cloud dependencies, telemetry, or paid APIs. OpenDataGuard provides a dual interface:
+
+- **Embeddable Python Library**: Directly integrate data quality checks, reconciliation routines, and scoring into your Python scripts, pandas workflows, and automated ETL/ELT pipelines via `pip install opendataguard`.
+- **Interactive Web Dashboard**: Explore dataset health visually, drill down into defect samples, perform side-by-side reconciliation, and export multi-sheet audit reports using the built-in Streamlit interface.
 
 ---
 
 ## 2. Problem Statement
 
 Modern data pipelines frequently suffer from:
-- **Silent data regressions**: Upstream schema modifications, null spikes, or unannounced type changes breaking downstream dashboards.
-- **Flawed data migrations**: Cloud migrations and ETL transformations requiring tedious manual spot-checking between source and target systems.
-- **Cartesian explosion in reconciliation**: Naive join tools silently multiplying duplicate keys, generating false diff results.
-- **Heavyweight proprietary tooling**: Existing data observability platforms that require expensive enterprise contracts, external SaaS credentials, or security risks by transmitting company datasets over the wire.
 
-OpenDataGuard solves these problems with a 100% local, safe, open-source engine with deterministic scoring, transparent reporting, and zero telemetry.
+- **Silent data regressions**: Upstream schema modifications, null spikes, and unannounced type changes that silently corrupt downstream models and executive dashboards.
+- **Flawed data migrations**: Cloud warehouse migrations and ETL transformations requiring tedious, error-prone manual spot-checking between source and target systems.
+- **Cartesian explosion in reconciliation**: Naive join tools silently multiplying duplicate keys, generating millions of false diff records and crashing memory.
+- **Heavyweight proprietary tooling**: Observability platforms that require expensive SaaS subscriptions, vendor lock-in, and security risks by transmitting company datasets over the wire.
+
+OpenDataGuard solves these challenges with a 100% local, safe engine featuring deterministic scoring, transparent reporting, and zero network data transfer.
 
 ---
 
 ## 3. Key Features
 
-- **🛡️ 12 Configurable Data Quality Checks**:
-  1. Missing / null value detection with threshold tolerance (`check_missing_values`).
-  2. Full row and subset duplicate detection (`check_duplicate_rows`).
-  3. Unique key and null key integrity enforcement (`check_key_uniqueness`).
-  4. Data type conformity: integer, float, date, boolean, text (`check_data_types`).
-  5. Date validity and chronological range bounding (`check_date_validity`).
-  6. Numeric validity with NaN and infinity guards (`check_numeric_validity`).
-  7. Min/max numeric range limits (`check_value_range`).
-  8. String length boundaries: min/max character count (`check_string_length`).
-  9. Categorical domain membership: allowed values (`check_allowed_values`).
-  10. Schema and column mismatch detection: missing/unexpected columns (`check_schema_mismatch`).
-  11. Regular expression pattern matching (`check_regex_pattern`).
-  12. Email format validation (`check_email_format`).
-
-- **📁 Supported File Formats**:
-  - **CSV** (`.csv`): Supported with automatic encoding fallback (`utf-8`, `utf-8-sig`, `latin1`, `cp1252`, `iso-8859-1`).
-  - **TSV / Delimited Text** (`.tsv`, `.txt`): Tab- and comma-delimited text files.
-  - **Excel** (`.xlsx`, `.xls`): Parsed safely via OpenPyXL without executing macros or scripts.
-  - **Chunked CSV Reading**: Bounded memory stream via `read_csv_in_chunks` for large files.
-
-- **📈 Continuous Data Quality Score (0.0% – 100.0%)**:
-  - Deterministic scoring computed across all executed assertions:
-    $$\text{DQ Score} = \left(\frac{1}{N} \sum_{i=1}^{N} \text{check\_score}_i\right) \times 100$$
-  - Row-level checks: $\text{check\_score} = \max\left(0.0, 1.0 - \frac{\text{failed\_records}}{\text{total\_records}}\right)$.
-  - Structural / schema checks: binary scoring ($1.0$ if passed, $0.0$ if failed).
-  - Defaults safely to $100.0\%$ if no rules are specified.
+- **🛡️ 14 Configurable Data Quality Checks**:
+  1. **Missing values** with threshold tolerance (`check_missing_values`).
+  2. **Duplicate row detection** across full rows or key subsets (`check_duplicate_rows`).
+  3. **Unique key integrity** and null key enforcement (`check_key_uniqueness`).
+  4. **Data type conformity** for integer, float, date, boolean, and text (`check_data_types`).
+  5. **Date validity** and chronological range bounding (`check_date_validity`).
+  6. **Numeric validity** with NaN and infinity guards (`check_numeric_validity`).
+  7. **Numeric range boundaries** with min/max thresholds (`check_value_range`).
+  8. **String length boundaries** with character count limits (`check_string_length`).
+  9. **Categorical domain membership** with allowed value sets (`check_allowed_values`).
+  10. **Regular expression pattern matching** (`check_regex_pattern`).
+  11. **RFC-compliant email format validation** (`check_email_format`).
+  12. **Schema and column mismatch detection** for missing/unexpected columns (`check_schema_mismatch`).
+  13. **Outlier detection via Interquartile Range (IQR)** (`check_outliers_iqr`).
+  14. **Row count boundary enforcement** (`check_row_count`).
 
 - **🔄 Two-Way Dataset Reconciliation**:
   - Key-based 1-to-1 diff between Source and Target datasets.
-  - Cell-by-cell discrepancy tracking.
-  - Floating-point tolerance (`atol` and `rtol`) for precision differences.
-  - Duplicate key and null key guards to prevent accidental Cartesian explosion.
+  - Cell-by-cell discrepancy tracking with configurable floating-point tolerances (`float_atol`, `float_rtol`).
+  - Pre-flight duplicate key and null key guards to prevent accidental Cartesian explosion.
   - Clear isolation of *Source-Only*, *Target-Only*, *Value Mismatches*, and *Matched* records.
+
+- **📈 Continuous Data Quality Score (0.0% – 100.0%)**:
+  - Deterministic composite scoring across all executed assertions:
+    $$\text{DQ Score} = \left(\frac{1}{N} \sum_{i=1}^{N} \text{check\_score}_i\right) \times 100$$
+  - Row-level checks: $\text{check\_score} = \max\left(0.0, 1.0 - \frac{\text{failed\_records}}{\text{total\_records}}\right)$.
+  - Structural / schema checks: binary scoring ($1.0$ if passed, $0.0$ if failed).
+  - Defaults safely to $100.0\%$ when no rules fail.
 
 - **📜 Declarative Rules-as-Code**:
   - Author and version-control validation assertions in JSON or YAML.
-  - Strict config validation rejecting malformed rules before execution.
+  - Strict configuration schema validation rejecting malformed rules before execution.
 
 - **🗄️ Secure SQL Database Auditing**:
-  - Read-only schema and table auditing via SQLAlchemy 2.0 (SQLite default, PostgreSQL optional).
-  - Passwords and connection secrets are automatically masked in logs and output.
+  - Read-only schema and table auditing via SQLAlchemy 2.0 (SQLite included, PostgreSQL optional).
+  - Sensitive connection secrets and credentials are automatically masked in all logs and outputs.
   - Bounded queries prevent accidental memory exhaustion on large database tables.
 
 - **📊 Interactive Streamlit Dashboard**:
-  - Visual summary cards and continuous Data Quality Scores ($0\% - 100\%$).
+  - Visual summary KPI cards and continuous Data Quality Scores.
   - Plotly-powered column error distributions and historical score trends.
-  - Drill-down tables with failing row samples.
+  - Drill-down tables with failing row samples for immediate root-cause analysis.
 
 - **📥 Multi-Format Deterministic Reports**:
   - One-click export to multi-sheet Excel workbooks (`.xlsx`), CSV, and deterministic JSON schemas with UTC ISO-8601 timestamps.
 
 - **🔒 Local Audit History**:
-  - Embedded SQLite audit ledger tracking execution metadata without persisting raw source data rows.
+  - Embedded SQLite audit ledger tracking execution metadata without persisting raw dataset rows.
 
 ---
 
@@ -97,7 +99,7 @@ OpenDataGuard solves these problems with a 100% local, safe, open-source engine 
 | :---: | :---: |
 | ![Reconciliation](docs/screenshots/04_dataset_reconciliation.png) | ![SQL Inspection](docs/screenshots/05_sql_database_validation.png) |
 
-> 📸 **Full Showcase Gallery**: High-resolution captures for all 6 verified views are available in the [Screenshots Gallery](docs/screenshots/README.md).
+> 📸 **Full Showcase Gallery**: High-resolution captures for all views are available in the [Screenshots Gallery](docs/screenshots/README.md).
 
 ---
 
@@ -105,143 +107,199 @@ OpenDataGuard solves these problems with a 100% local, safe, open-source engine 
 
 ```mermaid
 graph TD
-    UI[Streamlit Web App: app.py] --> Core[Core Engine: opendataguard]
-    CLI[Python Scripts & Pipelines] --> Core
+    API[Python Library: import opendataguard] --> Core[Core Engine]
+    UI[Streamlit Web App: app.py] --> Core
 
-    subgraph "Core Engine (src/opendataguard)"
-        Ingest[Safe File Ingestion]
-        Val[12 Modular Validators]
+    subgraph "Core Engine (opendataguard)"
+        Ingest[Safe File Ingestion & Chunking]
+        Val[14 Modular Validators]
         Rules[Declarative Rule Engine]
-        Rec[Reconciliation Engine]
+        Rec[Two-Way Reconciliation Engine]
         DB[SQL Database Inspector]
-        Rep[Report Serializers]
-        Hist[SQLite History Manager]
-        Log[Sanitized Logger]
+        Rep[Multi-Format Report Serializers]
+        Hist[SQLite Audit History Manager]
+        Log[Sanitized Credential-Masking Logger]
     end
 
-    Core --> Storage[(Local History: history.db)]
+    Core --> Storage[(Local Audit Trail: history.db)]
     Core --> OutReports[Excel / CSV / JSON Reports]
     Core --> TargetDB[(SQLite / PostgreSQL)]
 ```
 
 ---
 
-## 6. Technology Stack
+## 6. Installation
 
-- **Python**: 3.10, 3.11, 3.12
-- **Data Processing**: Pandas, NumPy
-- **Interactive UI**: Streamlit
-- **Visualizations**: Plotly
-- **Database Layer**: SQLAlchemy 2.0, SQLite (default), optional psycopg2 for PostgreSQL
-- **Spreadsheet Generation**: OpenPyXL
-- **Rules Serialization**: PyYAML, json
-- **Test Framework**: Pytest
-- **CI/CD**: GitHub Actions
+OpenDataGuard supports Python **3.9, 3.10, 3.11, and 3.12**.
 
----
+### Option A: Install from PyPI (Recommended for ETL & Pipelines)
 
-## 7. Installation & Prerequisites
+Install the core package directly from PyPI into your virtual environment:
 
-### Prerequisites
-- Python 3.10+ installed.
-- Git.
-
-### Step 1: Clone Repository
 ```bash
+pip install opendataguard
+```
+
+If you plan to inspect PostgreSQL databases, install the optional PostgreSQL driver extra:
+
+```bash
+pip install "opendataguard[postgres]"
+```
+
+### Option B: Clone from GitHub (For Development & Web UI)
+
+To run the interactive Streamlit dashboard or contribute to development:
+
+```bash
+# 1. Clone the repository
 git clone https://github.com/RushikeshAlase7879/OpenDataGuard.git
 cd OpenDataGuard
-```
 
-### Step 2: Set Up Virtual Environment
-
-**Windows (PowerShell):**
-```powershell
+# 2. Create and activate a virtual environment
+# Windows (PowerShell):
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-```
 
-**macOS / Linux:**
-```bash
+# Linux / macOS:
 python3 -m venv venv
 source venv/bin/activate
-```
 
-### Step 3: Install Dependencies
-```bash
+# 3. Install dependencies in editable mode
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
 
-# Optional: Install PostgreSQL support driver
-pip install -e .[postgres]  # Or: pip install psycopg2-binary
+# Optional: Install development & testing tools
+pip install -e ".[dev]"
 ```
 
 ---
 
-## 8. Quickstart & Application Startup
+## 7. Quickstart Guide
 
-To launch the interactive Streamlit dashboard:
-```bash
-streamlit run app.py
-```
-Open your browser at `http://localhost:8501`.
-
-> 💡 **Step-by-Step Demo Guide**: For a guided walkthrough covering sample dataset ingestion, interactive rule building, two-way reconciliation, and report generation, see [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md).
-
----
-
-## 9. Automated Testing
-
-Run the comprehensive automated test suite (86 unit, integration, and UI tests covering all modules):
-
-```bash
-# Using the test runner script:
-python scripts/run_tests.py
-
-# Or directly with pytest:
-pytest tests/ -v
-```
-
----
-
-## 10. Python API Usage
-
-OpenDataGuard can be embedded directly in your Python ETL pipelines:
+### 1. In-Memory DataFrame Validation
 
 ```python
 import pandas as pd
-from opendataguard.validators import check_missing_values, check_value_range, calculate_data_quality_score
-from opendataguard.reconciliation import reconcile_datasets
-from opendataguard.rules import load_rules, execute_rule_suite
+from opendataguard import (
+    check_missing_values,
+    check_value_range,
+    check_email_format,
+    check_outliers_iqr,
+    check_row_count,
+    calculate_data_quality_score,
+)
 
-# 1. Direct Validation
+# Sample dataset
+df = pd.DataFrame({
+    "customer_id": [1001, 1002, 1003],
+    "email": ["alice@example.com", "bob@example.com", None],
+    "age": [25, 42, 19],
+    "balance": [100.50, 250.00, 310.25],
+})
+
+# Run individual quality checks
+res_missing = check_missing_values(df, column="email")
+res_age = check_value_range(df, column="age", min_value=18, max_value=120)
+res_email = check_email_format(df, column="email")
+res_outliers = check_outliers_iqr(df, column="balance", factor=1.5)
+res_rows = check_row_count(df, min_rows=1, max_rows=100000)
+
+# Compute composite Data Quality Score (0.0% to 100.0%)
+all_checks = [res_missing, res_age, res_email, res_outliers, res_rows]
+score = calculate_data_quality_score(all_checks)
+
+print(f"Data Quality Score: {score:.2f}%")
+print(f"Email check passed: {res_missing.passed} (Failed rows: {res_missing.failed_records})")
+```
+
+### 2. Declarative Rule Suite Execution
+
+Execute validation suites defined in JSON or YAML:
+
+```python
+import pandas as pd
+from opendataguard import load_rules, execute_rule_suite
+
 df = pd.read_csv("examples/sample_source.csv")
-res1 = check_missing_values(df, column="email")
-res2 = check_value_range(df, column="age", min_value=18, max_value=120)
 
-score = calculate_data_quality_score([res1, res2])
-print(f"Data Quality Score: {score}%")
-
-# 2. Rule Suite Execution
+# Load and execute rule suite from JSON or YAML
 rules = load_rules("config/sample_rules.json")
 suite_results = execute_rule_suite(df, rules)
 
-# 3. Two-Way Dataset Reconciliation
-source = pd.read_csv("examples/sample_source_deduped.csv")
-target = pd.read_csv("examples/sample_target.csv")
-rec = reconcile_datasets(source, target, key_columns="customer_id", float_atol=1e-4)
+passed_count = sum(1 for r in suite_results if r.passed)
+print(f"Executed {len(suite_results)} rules: {passed_count} passed.")
+```
+
+### 3. Two-Way Dataset Reconciliation
+
+Compare two tabular datasets with key alignment, tolerance handling, and discrepancy categorization:
+
+```python
+import pandas as pd
+from opendataguard import reconcile_datasets
+
+source_df = pd.read_csv("examples/sample_source_deduped.csv")
+target_df = pd.read_csv("examples/sample_target.csv")
+
+# Reconcile on customer_id with numeric tolerance
+rec = reconcile_datasets(
+    source_df,
+    target_df,
+    key_columns="customer_id",
+    float_atol=1e-4,
+    float_rtol=1e-4,
+)
 
 print(f"Match Rate: {rec.summary.match_rate_percent}%")
-print(f"Mismatches: {rec.summary.mismatched_records}")
+print(f"Matched Records: {rec.summary.matched_records}")
+print(f"Mismatched Records: {rec.summary.mismatched_records}")
+print(f"Source-Only Records: {rec.summary.source_only_records}")
+print(f"Target-Only Records: {rec.summary.target_only_records}")
+
+# Inspect cell-level mismatches
+if not rec.mismatched_df.empty:
+    print(rec.mismatched_df.head())
 ```
+
+### 4. Generating Audit Reports
+
+Export standardized reports in JSON, CSV, or multi-sheet Excel:
+
+```python
+from opendataguard import (
+    generate_validation_json,
+    generate_validation_csv,
+    generate_validation_excel,
+)
+
+# Export validation suite results
+json_report = generate_validation_json(suite_results, dataset_name="customers")
+csv_report = generate_validation_csv(suite_results, dataset_name="customers")
+excel_bytes = generate_validation_excel(suite_results, dataset_name="customers")
+
+with open("validation_report.json", "w", encoding="utf-8") as f:
+    f.write(json_report)
+```
+
+### 5. Launching the Web Dashboard
+
+If you cloned the repository or installed Streamlit:
+
+```bash
+streamlit run app.py
+```
+
+Then open your browser at `http://localhost:8501`. For a guided UI walkthrough, consult [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md).
 
 ---
 
-## 11. Example Validation Rules (JSON & YAML)
+## 8. Declarative Rules-as-Code Configuration
 
-Validation suites can be authored as declarative JSON or YAML files and checked into version control:
+Rules can be version-controlled in JSON or YAML.
 
-### JSON Configuration (`config/sample_rules.json`)
+### JSON Specification (`config/sample_rules.json`)
+
 ```json
 {
   "version": "1.0",
@@ -265,7 +323,8 @@ Validation suites can be authored as declarative JSON or YAML files and checked 
 }
 ```
 
-### YAML Configuration (`config/sample_rules.yaml`)
+### YAML Specification (`config/sample_rules.yaml`)
+
 ```yaml
 version: "1.0"
 description: "Validation Rules for Customer Records"
@@ -321,58 +380,70 @@ rules:
 
 ---
 
-## 12. Sample Datasets Walkthrough
+## 9. Supported Formats & Database Engines
 
-Synthetic datasets are pre-packaged in `examples/`:
-- `sample_source.csv`: Contains intentional edge cases (duplicate customer ID 1001, null email, out-of-bounds age 250, invalid date format, invalid categorical status).
-- `sample_source_deduped.csv`: Deduplicated version ready for 1-to-1 reconciliation.
-- `sample_target.csv`: Downstream target dataset containing target-only customer 1099, value mismatches on customer 1005 (status changed to SUSPENDED, balance changed), and floating-point tolerance test on customer 1007.
+- **Supported File Formats**:
+  - **CSV** (`.csv`): Ingested with automatic encoding fallback (`utf-8`, `utf-8-sig`, `latin1`, `cp1252`, `iso-8859-1`).
+  - **TSV / Delimited Text** (`.tsv`, `.txt`): Tab- and comma-delimited text files.
+  - **Excel** (`.xlsx`, `.xls`): Parsed securely via OpenPyXL without macro or script execution.
+  - **Chunked CSV Reading**: Bounded memory stream via `read_csv_in_chunks` for high-volume tabular files.
 
-See [examples/README.md](examples/README.md) for full descriptions.
-
----
-
-## 13. Security and Privacy Safeguards
-
-- **100% Local In-Memory Execution**: Uploaded datasets are held only in local memory during your active session; data is never transmitted to external cloud services or telemetry endpoints.
-- **Strict Read-Only Database Auditing**: SQL inspections run exclusively safe schema discovery (`inspect()`) and bounded `SELECT` queries. Destructive statements (`DROP`, `ALTER`, `TRUNCATE`, `DELETE`, `UPDATE`, `INSERT`) are prohibited and blocked before submission.
-- **Systematic Credential Masking**: Passwords and secret connection strings in database URIs are automatically redacted (`***`) by `SanitizingFilter` across all application logs and UI views.
-- **Untrusted File Hardening**: File sizes are capped by default (100MB threshold), and unsupported extensions are rejected before ingestion. Excel files are parsed securely via OpenPyXL without VBA macro or external script execution.
-- **Persistent Local Audit History (Non-Immutable)**: Historical run metrics (rule counts, score, execution timestamps) are recorded locally in SQLite (`~/.opendataguard/history.db`). Raw data rows are never stored in history. Note that while this audit history persists across application and server restarts, it is user-clearable and not cryptographically immutable.
+- **Database Inspection**:
+  - **SQLite**: Out-of-the-box support for both file-based databases (`sqlite:///path/to/db.sqlite`) and in-memory test databases (`sqlite:///:memory:`).
+  - **PostgreSQL**: Architecturally supported via SQLAlchemy connection strings (`postgresql+psycopg2://...`), requiring the optional `psycopg2-binary` driver (`pip install "opendataguard[postgres]"`).
+    > **Note**: PostgreSQL connection handling and fallback error logic are tested via unit mocks and driver validation. Live server testing requires a running PostgreSQL instance.
 
 ---
 
-## 14. Database Support & Limitations
+## 10. Technology Stack & Dependencies
 
-- **SQLite**: Fully supported and verified out-of-the-box for both file-based databases (`sqlite:///path/to/db.sqlite`) and in-memory test databases (`sqlite:///:memory:`).
-- **PostgreSQL**: Architecturally supported via SQLAlchemy connection strings (`postgresql+psycopg2://...`), but requires installing the optional `psycopg2-binary` driver (`pip install -e .[postgres]`).
-  > **Verification Status**: PostgreSQL connection handling and fallback error logic have been tested via mocks and driver checks. However, **PostgreSQL has NOT been tested against an active live PostgreSQL server** in this verification environment because no live server instance was provisioned.
-- **Schema & Table Restrictions**: Only existing tables/views can be sampled. Multi-table relational joins and custom SQL execution queries are restricted to preserve database safety and prevent unintended I/O load.
+OpenDataGuard relies on the following verified core dependencies:
+
+| Component | Technology | Version Constraint |
+| :--- | :--- | :--- |
+| **Python** | Runtime | `>=3.9` (Tested on 3.10, 3.11, 3.12) |
+| **Data Processing** | `pandas` | `>=2.2.0, <3.0.0` |
+| **Numeric Computations** | `numpy` | `>=1.26.0, <3.0.0` |
+| **Interactive Dashboard** | `streamlit` | `>=1.35.0, <2.0.0` |
+| **Database Reflection** | `SQLAlchemy` | `>=2.0.0, <3.0.0` |
+| **Spreadsheet Generation**| `openpyxl` | `>=3.1.2, <4.0.0` |
+| **Visualizations** | `plotly` | `>=5.20.0, <8.0.0` |
+| **Configuration Parsing** | `PyYAML` | `>=6.0.1, <7.0.0` |
+| **Data Validation** | `pydantic` | `>=2.7.0, <3.0.0` |
+| **PostgreSQL (Optional)**| `psycopg2-binary`| `>=2.9.9` |
 
 ---
 
-## 15. Known Limitations & Issues
+## 11. Security and Privacy Safeguards
 
-- **Memory Ceiling for Monolithic DataFrames**: Like standard pandas workloads, large datasets (> 1-2 GB) may encounter memory limits if loaded in full. For high-volume CSV files, use the provided chunked reader utility (`read_csv_in_chunks`).
-- **Composite Key Type Conversions**: Mixed-type composite reconciliation keys (e.g., matching integer `1` with string `"1"`) require explicit type casting before diffing to avoid false key mismatches.
-- **Nested / Semi-Structured Objects**: Hierarchical JSON or dictionary payloads inside individual column cells must be flattened into tabular columns before running column-specific assertions.
+- **100% Local In-Memory Execution**: Uploaded datasets are processed strictly in memory during your active session; data is never transmitted to external cloud services or telemetry endpoints.
+- **Strict Read-Only Database Auditing**: SQL inspections execute safe schema discovery (`inspect()`) and bounded `SELECT` queries. Destructive statements (`DROP`, `ALTER`, `TRUNCATE`, `DELETE`, `UPDATE`, `INSERT`) are strictly blocked before submission.
+- **Automated Credential Masking**: Passwords and secret connection strings in database URIs are automatically redacted (`***`) by `SanitizingFilter` across all application logs and UI views.
+- **Untrusted File Hardening**: File sizes are capped by default (100 MB threshold, configurable via environment variable), and unsupported extensions are rejected before ingestion.
+- **Privacy-First Audit Trail**: Local SQLite audit history records execution timestamps, rule pass/fail counts, and composite scores without storing raw customer data rows. Note that while this audit history persists across application restarts, it is user-clearable and not cryptographically immutable.
 
 ---
 
-## 16. Configuration & Environment Variables
+## 12. Configuration & Environment Variables
 
-OpenDataGuard operates with zero configuration defaults, but optional environment variables enable runtime customization:
+OpenDataGuard operates with sensible zero-configuration defaults, but can be customized using environment variables or a `.env` file (see [`.env.example`](.env.example)):
 
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
 | `OPENDATAGUARD_MAX_UPLOAD_BYTES` | `104857600` (100 MB) | Maximum dataset file upload size in bytes to protect against memory exhaustion. |
 | `OPENDATAGUARD_HISTORY_DB` | `~/.opendataguard/history.db` | Custom local file path for SQLite audit ledger storage. |
 
-Configuration variables can also be set in a `.env` file (copied from [`.env.example`](.env.example)) in your working directory.
+---
+
+## 13. Known Limitations
+
+- **In-Memory DataFrame Scale**: Datasets larger than physical RAM (> 1–2 GB) may encounter memory limits if loaded in full. For large CSV files, use the provided streaming reader (`read_csv_in_chunks`).
+- **Composite Key Type Conversions**: Mixed-type composite reconciliation keys (e.g., matching integer `1` with string `"1"`) require explicit type casting prior to diffing to avoid false key mismatches.
+- **Nested Semi-Structured Payloads**: Hierarchical JSON or nested dictionary payloads inside individual column cells should be flattened into tabular columns before running column-specific assertions.
 
 ---
 
-## 17. Project Structure
+## 14. Project Structure
 
 ```
 OpenDataGuard/
@@ -389,7 +460,7 @@ OpenDataGuard/
 ├── .env.example                # Sample environment variables
 ├── .github/
 │   └── workflows/
-│       └── tests.yml           # Multi-OS Automated CI/CD
+│       └── tests.yml           # Automated Multi-OS CI/CD Pipeline
 ├── config/
 │   ├── sample_rules.json       # Example declarative validation rules (JSON)
 │   └── sample_rules.yaml       # Example declarative validation rules (YAML)
@@ -399,12 +470,11 @@ OpenDataGuard/
 │   ├── validation_rules.md     # Declarative rule specification guide
 │   ├── troubleshooting.md      # FAQ and problem resolution
 │   ├── DEMO_GUIDE.md           # Step-by-step demonstration walkthrough
-│   ├── LINKEDIN_POST.md        # Open-source showcase draft
 │   └── screenshots/            # Showcase screenshots & capture guide
 ├── src/
 │   └── opendataguard/
 │       ├── __init__.py         # Public API exports
-│       ├── validators.py       # Core data quality checks & safe ingestion
+│       ├── validators.py       # 14 Core data quality checks & safe ingestion
 │       ├── reconciliation.py   # Two-way dataset diffing engine
 │       ├── database.py         # SQLAlchemy 2.0 read-only database auditor
 │       ├── rules.py            # JSON/YAML rule parser & execution engine
@@ -427,11 +497,36 @@ OpenDataGuard/
 │   ├── sample_target.csv       # Synthetic target with mismatches
 │   └── README.md               # Dataset documentation
 └── scripts/
-    └── run_tests.py            # Standalone test runner script
+    └── run_tests.py            # Automated test runner script
 ```
 
 ---
 
-## 18. License
+## 15. Automated Testing
 
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
+OpenDataGuard features an automated test suite comprising 86 unit, integration, and UI tests:
+
+```bash
+# Run the test suite via the standalone test runner:
+python scripts/run_tests.py
+
+# Or directly with pytest:
+pytest tests/ -v
+```
+
+---
+
+## 16. Contributing
+
+Contributions are welcome! Whether reporting a bug, improving documentation, or submitting a pull request, please review:
+
+1. [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup, coding standards, and PR workflows.
+2. [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines.
+
+To report security vulnerabilities, please refer to our [SECURITY.md](SECURITY.md) policy.
+
+---
+
+## 17. License
+
+OpenDataGuard is distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
