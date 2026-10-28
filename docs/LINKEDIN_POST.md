@@ -32,7 +32,7 @@ OpenDataGuard solves this with a 100% local, lightweight, and deterministic open
 
 ### Engineering & Testing Rigor
 A data quality tool must itself be thoroughly tested. OpenDataGuard is backed by:
-- **82 automated tests** across unit, integration, and UI modules with a 100% pass rate in ~16 seconds.
+- **86 automated tests** across unit, integration, and UI modules with a 100% pass rate in ~16 seconds.
 - Streamlit's official `AppTest` framework to verify UI rendering and session state stability across all 7 dashboard pages.
 - Multi-OS GitHub Actions CI matrix testing Python 3.10, 3.11, and 3.12 on both Ubuntu and Windows runners.
 

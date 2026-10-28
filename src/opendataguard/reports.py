@@ -55,23 +55,36 @@ def generate_validation_csv(
 
 def generate_validation_json(
     results: List[ValidationResult],
-    dataset_name: str,
-    row_count: int,
-    column_count: int,
+    dataset_name: Any,
+    row_count: Optional[int] = None,
+    column_count: Optional[int] = None,
     timestamp_utc: Optional[str] = None,
 ) -> str:
     """Generate a structured JSON validation summary report.
 
     Args:
         results: List of ValidationResult items.
-        dataset_name: Evaluated dataset name.
-        row_count: Dataset row count.
-        column_count: Dataset column count.
+        dataset_name: Evaluated dataset name (or DatasetMetadata object).
+        row_count: Dataset row count (optional if DatasetMetadata passed).
+        column_count: Dataset column count (optional if DatasetMetadata passed).
         timestamp_utc: Optional ISO timestamp.
 
     Returns:
         Formatted JSON string.
     """
+    resolved_name = dataset_name
+    if hasattr(dataset_name, "name") and hasattr(dataset_name, "row_count"):
+        resolved_name = dataset_name.name
+        if row_count is None:
+            row_count = dataset_name.row_count
+        if column_count is None:
+            column_count = dataset_name.column_count
+
+    if row_count is None:
+        row_count = results[0].total_records if results else 0
+    if column_count is None:
+        column_count = 0
+
     ts = timestamp_utc or datetime.now(timezone.utc).isoformat()
     passed_count = sum(1 for r in results if r.passed)
     failed_count = sum(1 for r in results if not r.passed)
@@ -82,7 +95,7 @@ def generate_validation_json(
             "platform": "OpenDataGuard",
             "version": "1.0.0",
             "timestamp_utc": ts,
-            "dataset_name": dataset_name,
+            "dataset_name": str(resolved_name),
             "total_rows": row_count,
             "total_columns": column_count,
         },
@@ -101,9 +114,9 @@ def generate_validation_json(
 
 def generate_validation_excel(
     results: List[ValidationResult],
-    dataset_name: str,
-    row_count: int,
-    column_count: int,
+    dataset_name: Any,
+    row_count: Optional[int] = None,
+    column_count: Optional[int] = None,
     timestamp_utc: Optional[str] = None,
 ) -> bytes:
     """Generate a multi-tab Excel validation workbook.
@@ -115,21 +128,34 @@ def generate_validation_excel(
 
     Args:
         results: List of ValidationResult items.
-        dataset_name: Dataset name.
-        row_count: Total row count.
-        column_count: Total column count.
+        dataset_name: Dataset name (or DatasetMetadata object).
+        row_count: Total row count (optional if DatasetMetadata passed).
+        column_count: Total column count (optional if DatasetMetadata passed).
         timestamp_utc: Timestamp.
 
     Returns:
         Excel workbook as bytes.
     """
+    resolved_name = dataset_name
+    if hasattr(dataset_name, "name") and hasattr(dataset_name, "row_count"):
+        resolved_name = dataset_name.name
+        if row_count is None:
+            row_count = dataset_name.row_count
+        if column_count is None:
+            column_count = dataset_name.column_count
+
+    if row_count is None:
+        row_count = results[0].total_records if results else 0
+    if column_count is None:
+        column_count = 0
+
     ts = timestamp_utc or datetime.now(timezone.utc).isoformat()
     passed_count = sum(1 for r in results if r.passed)
     failed_count = sum(1 for r in results if not r.passed)
     score = calculate_data_quality_score(results)
 
     summary_data = [
-        {"Metric": "Dataset Name", "Value": dataset_name},
+        {"Metric": "Dataset Name", "Value": str(resolved_name)},
         {"Metric": "Execution Timestamp (UTC)", "Value": ts},
         {"Metric": "Total Rows Checked", "Value": row_count},
         {"Metric": "Total Columns Checked", "Value": column_count},

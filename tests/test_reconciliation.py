@@ -152,3 +152,14 @@ def test_reconciliation_whitespace_and_case_options():
     assert res_strict.summary.mismatched_records == 2
 
 
+def test_reconciliation_disparate_columns_and_nan_values():
+    df_s = pd.DataFrame({"id": [1, 2], "val": [10.0, np.nan], "extra_source": ["A", "B"]})
+    df_t = pd.DataFrame({"id": [1, 2], "val": [10.0, np.nan], "extra_target": [100, 200]})
+
+    res = reconcile_datasets(df_s, df_t, key_columns="id")
+    assert res.summary.matched_records == 2
+    assert res.summary.mismatched_records == 0
+    assert "val" in res.summary.common_columns
+
+
+

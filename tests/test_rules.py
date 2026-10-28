@@ -180,4 +180,22 @@ def test_rule_suite_schema_strict():
     assert "Unexpected extra columns" in results[0].message
 
 
+def test_rule_suite_outliers_and_row_count():
+    df = pd.DataFrame({"score": [10.0, 11.0, 10.5, 11.5, 95.0]})  # 95 is outlier, 5 rows
+    config = {
+        "rules": [
+            {"rule": "row_count", "min_rows": 2, "max_rows": 10},
+            {"rule": "outliers", "column": "score", "factor": 1.5},
+        ]
+    }
+    results = execute_rule_suite(df, config)
+    assert len(results) == 2
+    # Row count passed
+    assert results[0].passed
+    # Outliers detected
+    assert not results[1].passed
+    assert results[1].failed_records == 1
+
+
+
 

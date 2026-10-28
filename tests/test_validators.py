@@ -409,4 +409,63 @@ def test_validate_file_safety_uses_env_var(monkeypatch):
         validate_file_safety(io.BytesIO(content_too_large), filename="large.csv")
 
 
+def test_check_outliers_iqr_detection():
+    from opendataguard.validators import check_outliers_iqr
+
+    # Standard distribution with clear outliers: 10, 11, 12, 10, 11, 12, and 100, -50
+    df = pd.DataFrame({"values": [10.0, 11.0, 12.0, 10.5, 11.5, 12.5, 10.2, 11.2, 100.0, -50.0]})
+    res = check_outliers_iqr(df, column="values", factor=1.5)
+    assert not res.passed
+    assert res.failed_records == 2
+    assert res.check_name == "outliers_iqr"
+    assert "lower_bound" in res.details
+    assert "upper_bound" in res.details
+
+    # Clean data without outliers
+    df_clean = pd.DataFrame({"values": [10.0, 11.0, 12.0, 10.5, 11.5, 12.5]})
+    res_clean = check_outliers_iqr(df_clean, column="values", factor=1.5)
+    assert res_clean.passed
+    assert res_clean.failed_records == 0
+
+    # Non-existent column
+    res_missing = check_outliers_iqr(df, column="nonexistent")
+    assert not res_missing.passed
+    assert "not found" in res_missing.message
+
+    # All null values handled safely
+    df_null = pd.DataFrame({"values": [None, np.nan, None]})
+    res_null = check_outliers_iqr(df_null, column="values")
+    assert res_null.passed
+    assert res_null.failed_records == 0
+
+
+def test_check_row_count_validation():
+    from opendataguard.validators import check_row_count
+
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
+
+    # Exact count match
+    res_exact = check_row_count(df, expected_rows=5)
+    assert res_exact.passed
+    assert res_exact.failed_records == 0
+
+    # Exact count mismatch
+    res_exact_fail = check_row_count(df, expected_rows=10)
+    assert not res_exact_fail.passed
+    assert res_exact_fail.failed_records == 5
+
+    # Bounds: within [3, 10]
+    res_bounds = check_row_count(df, min_rows=3, max_rows=10)
+    assert res_bounds.passed
+
+    # Bounds: below minimum
+    res_too_few = check_row_count(df, min_rows=10)
+    assert not res_too_few.passed
+
+    # Bounds: above maximum
+    res_too_many = check_row_count(df, max_rows=3)
+    assert not res_too_many.passed
+
+
+
 

@@ -147,7 +147,7 @@ python scripts/run_tests.py
 pytest tests/ -v
 ```
 
-Expected result: **82 passed, 0 failed, 0 skipped** across all 8 test modules.
+Expected result: **86 passed, 0 failed, 0 skipped** across all 8 test modules.
 
 ---
 

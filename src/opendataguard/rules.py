@@ -27,7 +27,9 @@ from opendataguard.validators import (
     check_key_uniqueness,
     check_missing_values,
     check_numeric_validity,
+    check_outliers_iqr,
     check_regex_pattern,
+    check_row_count,
     check_schema_mismatch,
     check_string_length,
     check_value_range,
@@ -51,6 +53,9 @@ SUPPORTED_RULES = {
     "email",
     "schema",
     "duplicate_rows",
+    "outliers",
+    "iqr",
+    "row_count",
 }
 
 
@@ -90,8 +95,8 @@ def validate_rule_config(config: Dict[str, Any]) -> None:
                 f"Unsupported rule type '{rule_type}' at index {idx}. Supported rule types: {supported}"
             )
 
-        # Schema and duplicate_rows rules don't require 'column'
-        if rule_type not in {"schema", "duplicate_rows"}:
+        # Schema, duplicate_rows, and row_count rules don't require 'column'
+        if rule_type not in {"schema", "duplicate_rows", "row_count"}:
             if "column" not in rule and "columns" not in rule:
                 raise ValueError(
                     f"Rule '{rule_type}' at index {idx} requires a 'column' or 'columns' specification."
@@ -286,6 +291,23 @@ def execute_rule(df: pd.DataFrame, rule_def: Dict[str, Any]) -> List[ValidationR
         expected = rule_def.get("expected_columns", [])
         strict = rule_def.get("strict", False)
         results.append(check_schema_mismatch(df, expected_columns=expected, strict=strict))
+
+    elif rule_type in ("outliers", "iqr"):
+        factor_val = float(rule_def.get("factor", 1.5))
+        results.append(check_outliers_iqr(df, column=col, factor=factor_val))
+
+    elif rule_type == "row_count":
+        min_r = rule_def.get("min_rows") or rule_def.get("min")
+        max_r = rule_def.get("max_rows") or rule_def.get("max")
+        exp_r = rule_def.get("expected_rows") or rule_def.get("expected")
+        results.append(
+            check_row_count(
+                df,
+                min_rows=int(min_r) if min_r is not None else None,
+                max_rows=int(max_r) if max_r is not None else None,
+                expected_rows=int(exp_r) if exp_r is not None else None,
+            )
+        )
 
     return results
 

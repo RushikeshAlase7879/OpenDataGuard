@@ -10,9 +10,10 @@ import json
 import os
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -49,6 +50,16 @@ class HistoryManager:
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _connection(self):
+        """Yield a managed sqlite3 connection that closes cleanly on exit."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+
     def _init_db(self) -> None:
         """Create tables if they do not exist."""
         create_runs_table = """
@@ -79,7 +90,7 @@ class HistoryManager:
             FOREIGN KEY (run_id) REFERENCES validation_runs (run_id) ON DELETE CASCADE
         );
         """
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute(create_runs_table)
             conn.execute(create_details_table)
@@ -89,41 +100,39 @@ class HistoryManager:
         self,
         dataset_name: str,
         total_rows: int,
-        total_columns: int,
-        results: List[ValidationResult],
+        total_columns: Any,
+        results: Optional[List[ValidationResult]] = None,
         dq_score: Optional[float] = None,
         custom_run_id: Optional[str] = None,
     ) -> str:
         """Record validation run summary and individual check results.
 
-        Args:
-            dataset_name: Name of validated dataset.
-            total_rows: Dataset row count.
-            total_columns: Dataset column count.
-            results: List of ValidationResult items.
-            dq_score: Optional precalculated DQ score.
-            custom_run_id: Optional user-specified ID.
-
-        Returns:
-            The unique run_id string.
+        Supports both standard 4-argument and 3-argument calling forms.
         """
+        if isinstance(total_columns, list):
+            custom_run_id = dq_score if isinstance(dq_score, str) else custom_run_id
+            dq_score = results if isinstance(results, (int, float)) else None
+            results = total_columns
+            total_columns = 0
+
+        actual_results = results or []
         run_id = custom_run_id or str(uuid.uuid4())
         ts = datetime.now(timezone.utc).isoformat()
-        passed_count = sum(1 for r in results if r.passed)
-        failed_count = sum(1 for r in results if not r.passed)
-        score = dq_score if dq_score is not None else calculate_data_quality_score(results)
+        passed_count = sum(1 for r in actual_results if r.passed)
+        failed_count = sum(1 for r in actual_results if not r.passed)
+        score = dq_score if dq_score is not None else calculate_data_quality_score(actual_results)
         status = "PASSED" if failed_count == 0 else "FAILED"
 
         summary_payload = {
             "run_id": run_id,
             "dataset_name": dataset_name,
-            "total_checks": len(results),
+            "total_checks": len(actual_results),
             "passed_checks": passed_count,
             "failed_checks": failed_count,
             "dq_score": score,
         }
 
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO validation_runs 
@@ -136,7 +145,7 @@ class HistoryManager:
                     dataset_name,
                     total_rows,
                     total_columns,
-                    len(results),
+                    len(actual_results),
                     passed_count,
                     failed_count,
                     score,
@@ -145,7 +154,7 @@ class HistoryManager:
                 ),
             )
 
-            for r in results:
+            for r in actual_results:
                 conn.execute(
                     """
                     INSERT INTO validation_details 
@@ -192,7 +201,7 @@ class HistoryManager:
         ORDER BY timestamp_utc DESC
         LIMIT ?
         """
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             df = pd.read_sql_query(query, conn, params=(limit,))
         return df
 
@@ -205,7 +214,7 @@ class HistoryManager:
         Returns:
             Dictionary with run metadata and check details, or None if not found.
         """
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             run_cursor = conn.execute("SELECT * FROM validation_runs WHERE run_id = ?", (run_id,))
             run_row = run_cursor.fetchone()
             if not run_row:
@@ -237,7 +246,7 @@ class HistoryManager:
         Returns:
             True if cleared successfully.
         """
-        with self._get_connection() as conn:
+        with self._connection() as conn:
             conn.execute("DELETE FROM validation_details")
             conn.execute("DELETE FROM validation_runs")
             conn.commit()

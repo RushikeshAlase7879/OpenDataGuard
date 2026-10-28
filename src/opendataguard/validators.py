@@ -1015,6 +1015,132 @@ def check_email_format(
     return res
 
 
+def check_outliers_iqr(
+    df: pd.DataFrame,
+    column: str,
+    factor: float = 1.5,
+    max_samples: int = 10,
+) -> ValidationResult:
+    """Detect statistical outliers in a numeric column using the Interquartile Range (IQR) method.
+
+    Boundaries are defined as:
+        Lower Bound = Q1 - (factor * IQR)
+        Upper Bound = Q3 + (factor * IQR)
+    Where IQR = Q3 - Q1.
+    Values strictly outside [Lower Bound, Upper Bound] are flagged as outliers.
+    Null records are ignored (evaluated separately by missing_values check).
+
+    Args:
+        df: Input DataFrame.
+        column: Numeric column name.
+        factor: IQR multiplier (default 1.5 for Tukey's mild outliers; 3.0 for extreme).
+        max_samples: Maximum failing samples.
+
+    Returns:
+        ValidationResult.
+    """
+    total = len(df)
+    if column not in df.columns:
+        return ValidationResult("outliers_iqr", column, total, 0, False, f"Column '{column}' not found.")
+
+    non_null_mask = ~df[column].isna()
+    numeric_series = pd.to_numeric(df.loc[non_null_mask, column], errors="coerce")
+    valid_numeric_mask = ~numeric_series.isna()
+
+    if not valid_numeric_mask.any():
+        return ValidationResult(
+            check_name="outliers_iqr",
+            column_name=column,
+            total_records=total,
+            failed_records=0,
+            passed=True,
+            message=f"No non-null numeric values found in '{column}' to compute IQR.",
+            details={"factor": factor},
+        )
+
+    clean_series = numeric_series[valid_numeric_mask]
+    q1 = float(clean_series.quantile(0.25))
+    q3 = float(clean_series.quantile(0.75))
+    iqr = q3 - q1
+
+    lower_bound = q1 - (factor * iqr)
+    upper_bound = q3 + (factor * iqr)
+
+    outlier_idx = clean_series[(clean_series < lower_bound) | (clean_series > upper_bound)].index
+    fail_mask = pd.Series(False, index=df.index)
+    fail_mask.loc[outlier_idx] = True
+
+    failed_cnt = int(fail_mask.sum())
+    passed = failed_cnt == 0
+
+    msg = (
+        f"No IQR outliers detected in '{column}' (bounds: [{lower_bound:.2f}, {upper_bound:.2f}])."
+        if passed
+        else f"Column '{column}' has {failed_cnt} outlier value(s) outside [{lower_bound:.2f}, {upper_bound:.2f}]."
+    )
+
+    return ValidationResult(
+        check_name="outliers_iqr",
+        column_name=column,
+        total_records=total,
+        failed_records=failed_cnt,
+        passed=passed,
+        message=msg,
+        failing_sample=_extract_sample(df, fail_mask, max_samples),
+        details={
+            "q1": q1,
+            "q3": q3,
+            "iqr": iqr,
+            "lower_bound": lower_bound,
+            "upper_bound": upper_bound,
+            "factor": factor,
+        },
+    )
+
+
+def check_row_count(
+    df: pd.DataFrame,
+    min_rows: Optional[int] = None,
+    max_rows: Optional[int] = None,
+    expected_rows: Optional[int] = None,
+) -> ValidationResult:
+    """Validate that the dataset contains an acceptable number of rows.
+
+    Args:
+        df: Input DataFrame.
+        min_rows: Optional minimum expected rows.
+        max_rows: Optional maximum expected rows.
+        expected_rows: Optional exact expected rows.
+
+    Returns:
+        ValidationResult.
+    """
+    total = len(df)
+    passed = True
+    msg_parts = []
+
+    if expected_rows is not None and total != expected_rows:
+        passed = False
+        msg_parts.append(f"Expected exactly {expected_rows} rows, found {total}")
+    if min_rows is not None and total < min_rows:
+        passed = False
+        msg_parts.append(f"Row count {total} is below minimum {min_rows}")
+    if max_rows is not None and total > max_rows:
+        passed = False
+        msg_parts.append(f"Row count {total} exceeds maximum {max_rows}")
+
+    msg = "; ".join(msg_parts) if not passed else f"Row count {total} is within acceptable bounds."
+    return ValidationResult(
+        check_name="row_count",
+        column_name=None,
+        total_records=total,
+        failed_records=0 if passed else total,
+        passed=passed,
+        message=msg,
+        details={"min_rows": min_rows, "max_rows": max_rows, "expected_rows": expected_rows, "actual_rows": total},
+    )
+
+
 # ============================================================================
 # Data Quality Score Calculation
 # ============================================================================

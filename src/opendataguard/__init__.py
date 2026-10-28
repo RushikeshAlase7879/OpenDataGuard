@@ -40,7 +40,9 @@ from opendataguard.validators import (
     check_key_uniqueness,
     check_missing_values,
     check_numeric_validity,
+    check_outliers_iqr,
     check_regex_pattern,
+    check_row_count,
     check_schema_mismatch,
     check_string_length,
     check_value_range,
@@ -76,6 +78,8 @@ __all__ = [
     "check_regex_pattern",
     "check_email_format",
     "check_schema_mismatch",
+    "check_outliers_iqr",
+    "check_row_count",
     "calculate_data_quality_score",
     # Reconciliation
     "reconcile_datasets",
