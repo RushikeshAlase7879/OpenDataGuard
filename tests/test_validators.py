@@ -293,3 +293,86 @@ def test_missing_column_across_validators():
     assert not r8.passed
     assert "not found" in r8.message
 
+
+def test_load_dataset_tsv_file(tmp_path):
+    tsv_file = tmp_path / "test.tsv"
+    tsv_file.write_text("id\tname\tscore\n1\tAlice\t95\n2\tBob\t88\n", encoding="utf-8")
+    df, meta = load_dataset(tsv_file)
+    assert len(df) == 2
+    assert meta.column_count == 3
+    assert list(df.columns) == ["id", "name", "score"]
+    assert df.iloc[0]["name"] == "Alice"
+
+
+def test_load_dataset_duplicate_column_detection(tmp_path):
+    csv_file = tmp_path / "dupe_cols.csv"
+    csv_file.write_text("item,item,qty\napple,banana,10\n", encoding="utf-8")
+    df, meta = load_dataset(csv_file)
+    assert len(df) == 1
+    assert meta.column_count == 3
+    assert len(meta.duplicate_columns) >= 1
+    assert "item.1" in meta.duplicate_columns
+
+
+def test_missing_values_with_empty_strings():
+    df = pd.DataFrame({"col": ["valid", "", "   ", None, "ok"]})
+    # Default: empty strings are not considered null
+    res_default = check_missing_values(df, column="col", treat_empty_as_missing=False)
+    assert res_default.failed_records == 1  # Only None
+
+    # With treat_empty_as_missing=True: empty and whitespace are also flagged
+    res_strict = check_missing_values(df, column="col", treat_empty_as_missing=True)
+    assert res_strict.failed_records == 3  # "", "   ", None
+
+
+def test_key_uniqueness_composite_keys():
+    df_valid = pd.DataFrame({
+        "country": ["US", "US", "CA", "CA"],
+        "postal": ["10001", "90210", "H3Z", "V6B"],
+    })
+    res_valid = check_key_uniqueness(df_valid, key_columns=["country", "postal"])
+    assert res_valid.passed
+    assert res_valid.failed_records == 0
+
+    df_dupe = pd.DataFrame({
+        "country": ["US", "US", "CA"],
+        "postal": ["10001", "10001", "H3Z"],
+    })
+    res_dupe = check_key_uniqueness(df_dupe, key_columns=["country", "postal"])
+    assert not res_dupe.passed
+    assert res_dupe.failed_records == 2
+
+
+def test_date_chronological_ordering():
+    df_chrono = pd.DataFrame({
+        "dates": ["2023-01-01", "2023-02-01", "2023-03-01", "2023-04-01"]
+    })
+    res_pass = check_date_validity(df_chrono, column="dates", check_chronological_order=True)
+    assert res_pass.passed
+    assert res_pass.failed_records == 0
+
+    df_out_of_order = pd.DataFrame({
+        "dates": ["2023-01-01", "2023-03-01", "2023-02-01", "2023-04-01"]
+    })
+    res_fail = check_date_validity(df_out_of_order, column="dates", check_chronological_order=True)
+    assert not res_fail.passed
+    assert res_fail.failed_records == 1
+
+
+def test_validators_do_not_mutate_input_dataframe(sample_df):
+    df_copy = sample_df.copy(deep=True)
+    # Execute multiple validators
+    check_missing_values(sample_df)
+    check_duplicate_rows(sample_df)
+    check_key_uniqueness(sample_df, key_columns="id")
+    check_data_types(sample_df, expected_types={"id": "int", "name": "string"})
+    check_value_range(sample_df, column="age", min_value=0, max_value=120)
+    check_date_validity(sample_df, column="joined")
+    check_string_length(sample_df, column="name", min_length=1, max_length=50)
+    check_allowed_values(sample_df, column="status", allowed_values=["ACTIVE", "INACTIVE", "PENDING"])
+    check_regex_pattern(sample_df, column="name", pattern=r"^[A-Z][a-z]+$")
+
+    # Assert DataFrame is completely unchanged
+    pd.testing.assert_frame_equal(sample_df, df_copy)
+
+

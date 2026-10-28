@@ -145,3 +145,39 @@ def test_load_repo_sample_rules():
         assert len(cfg_yaml["rules"]) >= 8
 
 
+def test_rule_suite_empty_strings_and_chronological():
+    df = pd.DataFrame({
+        "name": ["Alice", "   ", "Bob"],
+        "joined": ["2023-01-01", "2023-02-01", "2023-01-15"],  # Jan 15 out of order
+    })
+    config = {
+        "rules": [
+            {"rule": "required", "column": "name", "treat_empty_as_missing": True},
+            {"rule": "date_format", "column": "joined", "chronological": True},
+        ]
+    }
+    results = execute_rule_suite(df, config)
+    assert len(results) == 2
+    # Rule 0 (name) should fail on whitespace
+    assert not results[0].passed
+    assert results[0].failed_records == 1
+
+    # Rule 1 (joined) should fail on chronological sequence
+    assert not results[1].passed
+    assert results[1].failed_records == 1
+
+
+def test_rule_suite_schema_strict():
+    df = pd.DataFrame({"col_a": [1], "col_b": [2], "extra_col": [3]})
+    strict_config = {
+        "rules": [
+            {"rule": "schema", "expected_columns": ["col_a", "col_b"], "strict": True}
+        ]
+    }
+    results = execute_rule_suite(df, strict_config)
+    assert len(results) == 1
+    assert not results[0].passed
+    assert "Unexpected extra columns" in results[0].message
+
+
+

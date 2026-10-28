@@ -176,7 +176,7 @@ Open your browser at `http://localhost:8501`.
 
 ## 8. Automated Testing
 
-Run the comprehensive automated test suite (60 unit and integration tests covering all modules):
+Run the comprehensive automated test suite (79 unit, integration, and UI tests covering all modules):
 
 ```bash
 # Using the test runner script:

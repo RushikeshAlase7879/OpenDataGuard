@@ -13,7 +13,7 @@ graph TD
 
     subgraph "Core Platform Engines (src/opendataguard)"
         Ingest[Ingestion & Profiling: validators.py]
-        Validators[10 Quality Checks: validators.py]
+        Validators[12 Quality Checks: validators.py]
         Rules[Declarative Rules: rules.py]
         Reconcile[Reconciliation: reconciliation.py]
         Database[SQL Inspector: database.py]
@@ -37,7 +37,7 @@ graph TD
 - Computes structural metadata (row count, column count, memory footprint, null counts) without mutating source data.
 
 ### Validation Engine (`validators.py`)
-- Implements 10 modular, stateless validation functions.
+- Implements 12 modular, stateless validation functions.
 - Every function returns a standardized `ValidationResult` dataclass containing:
   - `check_name`, `column_name`, `total_records`, `failed_records`, `passed`, `message`, `failing_sample`, `details`.
 - Computes a continuous, documented Data Quality Score:

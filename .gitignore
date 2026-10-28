@@ -54,3 +54,9 @@ desktop.ini
 .env.local
 *.key
 *.pem
+
+# Generated reports & temporary export files
+validation_report_*
+validation_summary_*
+dataset_reconciliation_report*
+*.log

@@ -132,3 +132,23 @@ def test_reconciliation_composite_keys():
     assert res.mismatched_df.iloc[0]["source_value"] == 20
     assert res.mismatched_df.iloc[0]["target_value"] == 99
 
+
+def test_reconciliation_whitespace_and_case_options():
+    df_s = pd.DataFrame({"id": [1, 2], "text": ["HELLO ", "world"]})
+    df_t = pd.DataFrame({"id": [1, 2], "text": ["hello", "WORLD"]})
+
+    # With case_sensitive=False and ignore_whitespace=True (both match)
+    res_lenient = reconcile_datasets(
+        df_s, df_t, key_columns="id", ignore_whitespace=True, case_sensitive=False
+    )
+    assert res_lenient.summary.matched_records == 2
+    assert res_lenient.summary.mismatched_records == 0
+
+    # With case_sensitive=True (both fail)
+    res_strict = reconcile_datasets(
+        df_s, df_t, key_columns="id", ignore_whitespace=True, case_sensitive=True
+    )
+    assert res_strict.summary.matched_records == 0
+    assert res_strict.summary.mismatched_records == 2
+
+

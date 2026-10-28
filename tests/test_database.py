@@ -109,3 +109,51 @@ def test_table_sample_bounded_limit(sqlite_engine):
     df = fetch_table_sample(sqlite_engine, "test_users", limit=1)
     assert len(df) == 1
 
+
+def test_postgresql_connection_error_and_password_masking():
+    # If psycopg2 is absent, create_safe_engine must raise ConnectionError and mask password
+    pg_config = DatabaseConfig(
+        dialect="postgresql",
+        host="localhost",
+        port=5432,
+        database="testdb",
+        username="admin",
+        password="unexposed_secret_password_999",
+    )
+    with pytest.raises(ConnectionError) as exc_info:
+        create_safe_engine(pg_config)
+
+    err_msg = str(exc_info.value)
+    assert "unexposed_secret_password_999" not in err_msg
+
+
+def test_sqlite_file_database_roundtrip(tmp_path):
+    import sqlite3
+    db_file = tmp_path / "test_local.db"
+    # Create the SQLite file first so it exists on disk
+    init_conn = sqlite3.connect(str(db_file))
+    init_conn.execute("CREATE TABLE init_tbl (id INTEGER);")
+    init_conn.commit()
+    init_conn.close()
+
+    config = DatabaseConfig(dialect="sqlite", sqlite_path=str(db_file))
+    engine = create_safe_engine(config)
+
+    # Populate a test table
+    sample_df = pd.DataFrame({"product": ["Widget", "Gadget"], "price": [19.99, 29.99]})
+    sample_df.to_sql("inventory", engine, index=False)
+
+    tables = list_database_tables(engine)
+    assert "inventory" in tables
+
+    schema = inspect_table_schema(engine, "inventory")
+    assert len(schema) == 2
+
+    row_count = get_table_row_count(engine, "inventory")
+    assert row_count == 2
+
+    fetched = fetch_table_sample(engine, "inventory", limit=5)
+    assert len(fetched) == 2
+    assert list(fetched["product"]) == ["Widget", "Gadget"]
+
+

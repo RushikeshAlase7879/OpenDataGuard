@@ -197,9 +197,10 @@ def execute_rule(df: pd.DataFrame, rule_def: Dict[str, Any]) -> List[ValidationR
 
     if rule_type == "required":
         target_cols = [col] if col else (cols or [])
+        treat_empty = bool(rule_def.get("treat_empty_as_missing", False))
         for c in target_cols:
             threshold = float(rule_def.get("threshold_percent", 0.0))
-            results.append(check_missing_values(df, column=c, threshold_percent=threshold))
+            results.append(check_missing_values(df, column=c, threshold_percent=threshold, treat_empty_as_missing=treat_empty))
 
     elif rule_type == "unique":
         key_cols = cols or ([col] if col else [])
@@ -260,13 +261,15 @@ def execute_rule(df: pd.DataFrame, rule_def: Dict[str, Any]) -> List[ValidationR
 
     elif rule_type == "date_format":
         fmt = rule_def.get("format")
-        results.append(check_date_validity(df, column=col, date_format=fmt))
+        chrono = bool(rule_def.get("chronological", False) or rule_def.get("check_chronological_order", False))
+        results.append(check_date_validity(df, column=col, date_format=fmt, check_chronological_order=chrono))
 
     elif rule_type == "date_range":
         fmt = rule_def.get("format")
         min_d = rule_def.get("min_date")
         max_d = rule_def.get("max_date")
-        results.append(check_date_validity(df, column=col, date_format=fmt, min_date=min_d, max_date=max_d))
+        chrono = bool(rule_def.get("chronological", False) or rule_def.get("check_chronological_order", False))
+        results.append(check_date_validity(df, column=col, date_format=fmt, min_date=min_d, max_date=max_d, check_chronological_order=chrono))
 
     elif rule_type == "regex":
         pattern_str = rule_def["pattern"]

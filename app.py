@@ -3,7 +3,7 @@
 Open-Source Data Quality, Validation, and Reconciliation Platform.
 Features:
 - Dataset Upload & Profiling
-- 10 Configurable Data Quality Checks
+- 12 Configurable Data Quality Checks
 - Declarative JSON/YAML Rule Runner
 - Dataset Reconciliation & Diff Engine
 - Safe Read-Only SQL Database Validator
@@ -173,7 +173,7 @@ if navigation == "📊 Overview":
         st.markdown(
             """
             - **Dataset Profiling**: Instantly load and inspect CSV, TSV, and Excel files with automated encoding detection and null profiling.
-            - **10 Core Quality Checks**: Validate missingness, unique keys, regex, data types, date formats, value ranges, string lengths, and categorical domains.
+            - **12 Core Quality Checks**: Validate missingness, unique keys, regex, email syntax, data types, date formats/ordering, value ranges, string lengths, and categorical domains.
             - **Rule-as-Code Engine**: Version-control data quality assertions via declarative JSON or YAML specifications.
             - **Two-Way Reconciliation**: Perform key-based diffs between source & target tables with floating-point tolerance and zero chance of many-to-many join duplication.
             - **Read-Only SQL Audits**: Connect securely to SQLite and PostgreSQL tables without credential logging or write side-effects.
@@ -812,6 +812,7 @@ elif navigation == "⚙️ Settings & Documentation":
             {"rule": "allowed_values", "column": "status", "values": ["ACTIVE", "INACTIVE", "PENDING"]},
             {"rule": "min_length", "column": "username", "value": 3},
             {"rule": "regex", "column": "email", "pattern": r"^[\w\.-]+@[\w\.-]+\.\w+$"},
+            {"rule": "email", "column": "email"},
             {"rule": "date_format", "column": "signup_date", "format": "%Y-%m-%d"},
             {"rule": "schema", "expected_columns": ["customer_id", "username", "email", "age", "status", "signup_date"]},
         ],

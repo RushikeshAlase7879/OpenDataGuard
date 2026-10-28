@@ -52,6 +52,7 @@ class DatasetMetadata:
     empty_columns: List[str]
     memory_usage_bytes: int
     file_size_bytes: Optional[int] = None
+    duplicate_columns: List[str] = field(default_factory=list)
 
     def memory_usage_mb(self) -> float:
         """Return memory footprint in megabytes."""
@@ -157,9 +158,10 @@ def load_dataset(
             logger.error("Failed to read Excel file %s: %s", resolved_name, exc)
             raise ValueError(f"Unable to parse Excel file '{resolved_name}': {exc}") from exc
     else:
-        # Default to CSV/delimiter parsing
+        # Default to CSV/TSV/delimiter parsing
         encodings_to_try = [encoding] if encoding else ["utf-8", "utf-8-sig", "latin1", "cp1252", "iso-8859-1"]
         last_error = None
+        sep = "\t" if ext in {".tsv", ".tab"} else None
 
         for enc in encodings_to_try:
             if not enc:
@@ -167,8 +169,12 @@ def load_dataset(
             try:
                 if isinstance(file_input, io.BytesIO):
                     file_input.seek(0)
-                df = pd.read_csv(file_input, encoding=enc, low_memory=False)
-                logger.info("Successfully loaded CSV '%s' using encoding '%s'", resolved_name, enc)
+                if sep is not None:
+                    df = pd.read_csv(file_input, sep=sep, encoding=enc, low_memory=False)
+                else:
+                    df = pd.read_csv(file_input, encoding=enc, low_memory=False)
+                format_lbl = "TSV" if sep == "\t" else "CSV"
+                logger.info("Successfully loaded %s '%s' using encoding '%s'", format_lbl, resolved_name, enc)
                 break
             except (UnicodeDecodeError, pd.errors.ParserError) as err:
                 last_error = err
@@ -176,7 +182,7 @@ def load_dataset(
 
         if df is None:
             raise ValueError(
-                f"Failed to read CSV '{resolved_name}'. Attempted encodings ({encodings_to_try}) failed: {last_error}"
+                f"Failed to read CSV/TSV '{resolved_name}'. Attempted encodings ({encodings_to_try}) failed: {last_error}"
             )
 
     if df.empty:
@@ -188,6 +194,15 @@ def load_dataset(
         if df[col].isna().all():
             empty_cols.append(str(col))
 
+    # Detect duplicate column names if disambiguated by pandas (e.g. 'col.1')
+    duplicate_cols = []
+    col_str_list = [str(c) for c in df.columns]
+    for c in col_str_list:
+        if re.search(r"\.\d+$", c):
+            base_col = re.sub(r"\.\d+$", "", c)
+            if base_col in col_str_list:
+                duplicate_cols.append(c)
+
     metadata = DatasetMetadata(
         name=resolved_name,
         row_count=len(df),
@@ -197,6 +212,7 @@ def load_dataset(
         empty_columns=empty_cols,
         memory_usage_bytes=int(df.memory_usage(deep=True).sum()),
         file_size_bytes=size_bytes,
+        duplicate_columns=duplicate_cols,
     )
 
     return df, metadata
@@ -239,6 +255,7 @@ def check_missing_values(
     df: pd.DataFrame,
     column: Optional[str] = None,
     threshold_percent: float = 0.0,
+    treat_empty_as_missing: bool = False,
     max_samples: int = 10,
 ) -> ValidationResult:
     """Check for missing or null values in a column or across the entire dataset.
@@ -247,6 +264,7 @@ def check_missing_values(
         df: Input DataFrame.
         column: Optional specific column name. If None, checks across all columns.
         threshold_percent: Allowed percentage of missing values (0.0 to 100.0).
+        treat_empty_as_missing: If True, also flags empty strings and whitespace-only strings.
         max_samples: Maximum failing samples to capture.
 
     Returns:
@@ -267,8 +285,17 @@ def check_missing_values(
                 f"Column '{column}' does not exist in dataset.",
             )
         mask = df[column].isna()
+        if treat_empty_as_missing:
+            is_str = df[column].apply(lambda x: isinstance(x, str))
+            str_empty = is_str & df[column].apply(lambda x: str(x).strip() == "" if isinstance(x, str) else False)
+            mask = mask | str_empty
     else:
         mask = df.isna().any(axis=1)
+        if treat_empty_as_missing:
+            for c in df.columns:
+                is_str = df[c].apply(lambda x: isinstance(x, str))
+                str_empty = is_str & df[c].apply(lambda x: str(x).strip() == "" if isinstance(x, str) else False)
+                mask = mask | str_empty
 
     failed_count = int(mask.sum())
     fail_rate = (failed_count / total) * 100.0
@@ -498,9 +525,10 @@ def check_date_validity(
     date_format: Optional[str] = None,
     min_date: Optional[Union[str, pd.Timestamp]] = None,
     max_date: Optional[Union[str, pd.Timestamp]] = None,
+    check_chronological_order: bool = False,
     max_samples: int = 10,
 ) -> ValidationResult:
-    """Validate that dates in a column are parseable and within bounds.
+    """Validate that dates in a column are parseable, within bounds, and optionally chronological.
 
     Args:
         df: Input DataFrame.
@@ -508,6 +536,7 @@ def check_date_validity(
         date_format: Optional strftime format (e.g. '%Y-%m-%d').
         min_date: Optional earliest valid date.
         max_date: Optional latest valid date.
+        check_chronological_order: If True, asserts valid dates appear in ascending chronological order.
         max_samples: Maximum failing samples.
 
     Returns:
@@ -543,20 +572,33 @@ def check_date_validity(
         too_late = valid_parsed[valid_parsed > max_ts].index
         out_of_bounds_mask.loc[too_late] = True
 
-    fail_mask = unparseable_mask | out_of_bounds_mask
+    # Chronological ordering check
+    order_mask = pd.Series(False, index=df.index)
+    if check_chronological_order and len(parsed.dropna()) > 1:
+        valid_parsed = parsed.dropna()
+        prev_dates = valid_parsed.shift(1)
+        out_of_order = valid_parsed[valid_parsed < prev_dates].index
+        order_mask.loc[out_of_order] = True
+
+    fail_mask = unparseable_mask | out_of_bounds_mask | order_mask
     failed_count = int(fail_mask.sum())
     passed = failed_count == 0
 
     unparseable_count = int(unparseable_mask.sum())
     oob_count = int(out_of_bounds_mask.sum())
+    order_count = int(order_mask.sum())
 
     if passed:
         msg = f"All non-null dates in '{column}' are valid."
     else:
-        msg = (
-            f"Date validity check failed for '{column}': {unparseable_count} unparseable dates, "
-            f"{oob_count} out-of-range dates (min: {min_date}, max: {max_date})."
-        )
+        parts = []
+        if unparseable_count > 0:
+            parts.append(f"{unparseable_count} unparseable dates")
+        if oob_count > 0:
+            parts.append(f"{oob_count} out-of-range dates (min: {min_date}, max: {max_date})")
+        if order_count > 0:
+            parts.append(f"{order_count} dates violating chronological order")
+        msg = f"Date validity check failed for '{column}': {', '.join(parts)}."
 
     return ValidationResult(
         check_name="date_validity",
@@ -566,7 +608,7 @@ def check_date_validity(
         passed=passed,
         message=msg,
         failing_sample=_extract_sample(df, fail_mask, max_samples),
-        details={"unparseable": unparseable_count, "out_of_bounds": oob_count},
+        details={"unparseable": unparseable_count, "out_of_bounds": oob_count, "out_of_order": order_count},
     )
 
 
