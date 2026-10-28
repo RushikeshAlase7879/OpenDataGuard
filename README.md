@@ -96,7 +96,7 @@ graph TD
 
     subgraph "Core Engine (src/opendataguard)"
         Ingest[Safe File Ingestion]
-        Val[10 Modular Validators]
+        Val[12 Modular Validators]
         Rules[Declarative Rule Engine]
         Rec[Reconciliation Engine]
         DB[SQL Database Inspector]
@@ -171,6 +171,8 @@ To launch the interactive Streamlit dashboard:
 streamlit run app.py
 ```
 Open your browser at `http://localhost:8501`.
+
+> 💡 **Step-by-Step Demo Guide**: For a guided walkthrough covering sample dataset ingestion, interactive rule building, two-way reconciliation, and report generation, see [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md).
 
 ---
 
@@ -343,7 +345,20 @@ See [examples/README.md](examples/README.md) for full descriptions.
 
 ---
 
-## 15. Project Structure
+## 15. Configuration & Environment Variables
+
+OpenDataGuard operates with zero configuration defaults, but optional environment variables enable runtime customization:
+
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `OPENDATAGUARD_MAX_UPLOAD_BYTES` | `104857600` (100 MB) | Maximum dataset file upload size in bytes to protect against memory exhaustion. |
+| `OPENDATAGUARD_HISTORY_DB` | `~/.opendataguard/history.db` | Custom local file path for SQLite audit ledger storage. |
+
+Configuration variables can also be set in a `.env` file (copied from [`.env.example`](.env.example)) in your working directory.
+
+---
+
+## 16. Project Structure
 
 ```
 OpenDataGuard/
@@ -368,7 +383,10 @@ OpenDataGuard/
 │   ├── architecture.md         # Architecture & module breakdown
 │   ├── installation.md         # Detailed setup instructions
 │   ├── validation_rules.md     # Declarative rule specification guide
-│   └── troubleshooting.md      # FAQ and problem resolution
+│   ├── troubleshooting.md      # FAQ and problem resolution
+│   ├── DEMO_GUIDE.md           # Step-by-step demonstration walkthrough
+│   ├── LINKEDIN_POST.md        # Open-source showcase draft
+│   └── screenshots/            # Showcase screenshots & capture guide
 ├── src/
 │   └── opendataguard/
 │       ├── __init__.py         # Public API exports
@@ -400,6 +418,6 @@ OpenDataGuard/
 
 ---
 
-## 16. License
+## 17. License
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
