@@ -87,7 +87,21 @@ OpenDataGuard solves these problems with a 100% local, safe, open-source engine 
 
 ---
 
-## 4. Architecture
+## 4. Visual Preview
+
+| Dataset Profiling & Overview | Quality Validation & Drill-down |
+| :---: | :---: |
+| ![Dataset Explorer](docs/screenshots/02_dataset_explorer.png) | ![Data Quality Validation](docs/screenshots/03_data_quality_validation.png) |
+
+| Two-Way Reconciliation | SQL Database Inspector |
+| :---: | :---: |
+| ![Reconciliation](docs/screenshots/04_dataset_reconciliation.png) | ![SQL Inspection](docs/screenshots/05_sql_database_validation.png) |
+
+> 📸 **Full Showcase Gallery**: High-resolution captures for all 6 verified views are available in the [Screenshots Gallery](docs/screenshots/README.md).
+
+---
+
+## 5. Architecture
 
 ```mermaid
 graph TD
@@ -112,7 +126,7 @@ graph TD
 
 ---
 
-## 5. Technology Stack
+## 6. Technology Stack
 
 - **Python**: 3.10, 3.11, 3.12
 - **Data Processing**: Pandas, NumPy
@@ -126,7 +140,7 @@ graph TD
 
 ---
 
-## 6. Installation & Prerequisites
+## 7. Installation & Prerequisites
 
 ### Prerequisites
 - Python 3.10+ installed.
@@ -164,7 +178,7 @@ pip install -e .[postgres]  # Or: pip install psycopg2-binary
 
 ---
 
-## 7. Quickstart & Application Startup
+## 8. Quickstart & Application Startup
 
 To launch the interactive Streamlit dashboard:
 ```bash
@@ -176,7 +190,7 @@ Open your browser at `http://localhost:8501`.
 
 ---
 
-## 8. Automated Testing
+## 9. Automated Testing
 
 Run the comprehensive automated test suite (82 unit, integration, and UI tests covering all modules):
 
@@ -190,7 +204,7 @@ pytest tests/ -v
 
 ---
 
-## 9. Python API Usage
+## 10. Python API Usage
 
 OpenDataGuard can be embedded directly in your Python ETL pipelines:
 
@@ -223,7 +237,7 @@ print(f"Mismatches: {rec.summary.mismatched_records}")
 
 ---
 
-## 10. Example Validation Rules (JSON & YAML)
+## 11. Example Validation Rules (JSON & YAML)
 
 Validation suites can be authored as declarative JSON or YAML files and checked into version control:
 
@@ -307,7 +321,7 @@ rules:
 
 ---
 
-## 11. Sample Datasets Walkthrough
+## 12. Sample Datasets Walkthrough
 
 Synthetic datasets are pre-packaged in `examples/`:
 - `sample_source.csv`: Contains intentional edge cases (duplicate customer ID 1001, null email, out-of-bounds age 250, invalid date format, invalid categorical status).
@@ -318,7 +332,7 @@ See [examples/README.md](examples/README.md) for full descriptions.
 
 ---
 
-## 12. Security and Privacy Safeguards
+## 13. Security and Privacy Safeguards
 
 - **100% Local In-Memory Execution**: Uploaded datasets are held only in local memory during your active session; data is never transmitted to external cloud services or telemetry endpoints.
 - **Strict Read-Only Database Auditing**: SQL inspections run exclusively safe schema discovery (`inspect()`) and bounded `SELECT` queries. Destructive statements (`DROP`, `ALTER`, `TRUNCATE`, `DELETE`, `UPDATE`, `INSERT`) are prohibited and blocked before submission.
@@ -328,7 +342,7 @@ See [examples/README.md](examples/README.md) for full descriptions.
 
 ---
 
-## 13. Database Support & Limitations
+## 14. Database Support & Limitations
 
 - **SQLite**: Fully supported and verified out-of-the-box for both file-based databases (`sqlite:///path/to/db.sqlite`) and in-memory test databases (`sqlite:///:memory:`).
 - **PostgreSQL**: Architecturally supported via SQLAlchemy connection strings (`postgresql+psycopg2://...`), but requires installing the optional `psycopg2-binary` driver (`pip install -e .[postgres]`).
@@ -337,7 +351,7 @@ See [examples/README.md](examples/README.md) for full descriptions.
 
 ---
 
-## 14. Known Limitations & Issues
+## 15. Known Limitations & Issues
 
 - **Memory Ceiling for Monolithic DataFrames**: Like standard pandas workloads, large datasets (> 1-2 GB) may encounter memory limits if loaded in full. For high-volume CSV files, use the provided chunked reader utility (`read_csv_in_chunks`).
 - **Composite Key Type Conversions**: Mixed-type composite reconciliation keys (e.g., matching integer `1` with string `"1"`) require explicit type casting before diffing to avoid false key mismatches.
@@ -345,7 +359,7 @@ See [examples/README.md](examples/README.md) for full descriptions.
 
 ---
 
-## 15. Configuration & Environment Variables
+## 16. Configuration & Environment Variables
 
 OpenDataGuard operates with zero configuration defaults, but optional environment variables enable runtime customization:
 
@@ -358,7 +372,7 @@ Configuration variables can also be set in a `.env` file (copied from [`.env.exa
 
 ---
 
-## 16. Project Structure
+## 17. Project Structure
 
 ```
 OpenDataGuard/
@@ -418,6 +432,6 @@ OpenDataGuard/
 
 ---
 
-## 17. License
+## 18. License
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.

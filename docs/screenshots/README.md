@@ -1,44 +1,55 @@
-# OpenDataGuard Application Screenshots Guide 📸
+# OpenDataGuard Application Screenshots 📸
 
-This directory is designated for high-resolution visual previews of the **OpenDataGuard** platform for repository visitors, documentation, and portfolio showcases.
-
----
-
-## Recommended Showcase Screenshots
-
-When showcasing OpenDataGuard to recruiters or hiring teams, capture the following 6 core screens:
-
-| Screenshot File | Page in App | Demonstration Focus |
-| :--- | :--- | :--- |
-| `01_overview_dashboard.png` | **📊 Overview** | Metric cards (Audited Runs, Average DQ Score, Total Rules Run), capabilities overview, Plotly historical DQ trend chart. |
-| `02_dataset_explorer.png` | **📁 Dataset Explorer** | Data preview table, metadata summary cards, `df.describe` basic statistics expander, missingness bar chart. |
-| `03_data_quality_validation.png` | **🛡️ Data Quality Validation** | DQ Score gauge (e.g. ~74%), failed checks list, failing record sample drilldown table. |
-| `04_dataset_reconciliation.png` | **🔄 Dataset Reconciliation** | Source vs target comparison, match rate KPI, source-only, target-only, and value mismatch breakdown. |
-| `05_sql_database_validation.png` | **🗄️ SQL Database Validation** | SQLite connection preview, schema column inspector, bounded table sampler. |
-| `06_validation_history.png` | **📜 Validation History** | Persistent SQLite audit ledger, historical trend visualization, individual run details inspector. |
+High-resolution visual previews of the **OpenDataGuard** platform captured directly from live application execution with synthetic demonstration datasets.
 
 ---
 
-## How to Capture Real Application Screenshots
+## Showcase Gallery
 
-Because headless browsers in headless CI/server sandboxes lack a hardware display context, capturing full-fidelity screenshots directly from your desktop browser provides the best visual quality:
+### 1. Overview Dashboard
+*Visual summary of total audited runs, continuous Data Quality Scores, platform capabilities, and historical score trend charts.*
+![Overview Dashboard](01_overview_dashboard.png)
 
-1. **Activate the Virtual Environment**:
-   ```powershell
-   cd D:\OpenDataGuard
-   .\.venv\Scripts\Activate.ps1
-   ```
+---
 
-2. **Launch the Application**:
-   ```bash
-   streamlit run app.py
-   ```
+### 2. Dataset Explorer & Profiling
+*Metadata cards (Rows, Columns, Duplicate Rows, Memory, Empty Columns), raw data preview table, statistical summary expander (`df.describe`), and missingness distribution bar chart.*
+![Dataset Explorer](02_dataset_explorer.png)
 
-3. **Navigate & Capture**:
-   - Open `http://localhost:8501` in your browser (Chrome, Edge, or Firefox).
-   - In **📁 Dataset Explorer**, click **Load Synthetic Example Dataset** -> **Load Sample Source CSV**.
-   - Use Windows Snipping Tool (`Win + Shift + S`) or browser full-page screenshot (`Ctrl + Shift + I` -> `Ctrl + Shift + P` -> "Capture full size screenshot").
-   - Save the images into `docs/screenshots/` following the filenames in the table above.
+---
 
-4. **Git Inclusion**:
-   - Commit the generated `.png` files to include them in your GitHub portfolio showcase.
+### 3. Data Quality Validation
+*Interactive rule configuration, declarative YAML/JSON execution, continuous Data Quality Score gauge, and failing record sample drilldown table.*
+![Data Quality Validation](03_data_quality_validation.png)
+
+---
+
+### 4. Two-Way Dataset Reconciliation
+*Source vs target 1-to-1 key diffing, tolerance configuration, match rate KPI, and breakdown of value mismatches, source-only, and target-only records.*
+![Dataset Reconciliation](04_dataset_reconciliation.png)
+
+---
+
+### 5. Read-Only SQL Database Validation
+*Safe connection string parsing, table schema inspection, and bounded table sampling with credential sanitization.*
+![SQL Database Validation](05_sql_database_validation.png)
+
+---
+
+### 6. Local Validation History
+*Persistent SQLite audit ledger, historical trend visualization, individual run details inspector, and audit purge controls.*
+![Validation History](06_validation_history.png)
+
+---
+
+## Automated Screenshot Generation
+
+To regenerate these screenshots automatically via Chrome DevTools Protocol:
+
+```bash
+# 1. Start Streamlit in headless mode
+streamlit run app.py --server.port 8506 --server.headless true
+
+# 2. In another terminal, run the capture script
+python scripts/capture_screenshots.py
+```

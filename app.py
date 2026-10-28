@@ -127,18 +127,36 @@ st.sidebar.image("https://raw.githubusercontent.com/feathericons/feather/master/
 st.sidebar.title("OpenDataGuard")
 st.sidebar.caption("v1.0.0 • Open-Source Data Quality Platform")
 
-navigation = st.sidebar.radio(
-    "Navigation",
-    [
-        "📊 Overview",
-        "📁 Dataset Explorer",
-        "🛡️ Data Quality Validation",
-        "🔄 Dataset Reconciliation",
-        "🗄️ SQL Database Validation",
-        "📜 Validation History",
-        "⚙️ Settings & Documentation",
-    ],
-)
+PAGES = [
+    "📊 Overview",
+    "📁 Dataset Explorer",
+    "🛡️ Data Quality Validation",
+    "🔄 Dataset Reconciliation",
+    "🗄️ SQL Database Validation",
+    "📜 Validation History",
+    "⚙️ Settings & Documentation",
+]
+page_idx = 0
+if "page" in st.query_params:
+    p = st.query_params["page"].lower()
+    for idx, name in enumerate(PAGES):
+        if p in name.lower():
+            page_idx = idx
+            break
+
+if st.query_params.get("sample") == "1":
+    if st.session_state.get("current_df") is None:
+        sample_path = Path(__file__).parent / "examples" / "sample_source.csv"
+        if sample_path.exists():
+            st.session_state["current_df"], st.session_state["current_metadata"] = load_dataset(sample_path, filename="sample_source.csv")
+    if st.session_state.get("source_df") is None:
+        src_path = Path(__file__).parent / "examples" / "sample_source_deduped.csv"
+        tgt_path = Path(__file__).parent / "examples" / "sample_target.csv"
+        if src_path.exists() and tgt_path.exists():
+            st.session_state["source_df"], _ = load_dataset(src_path, filename="sample_source_deduped.csv")
+            st.session_state["target_df"], _ = load_dataset(tgt_path, filename="sample_target.csv")
+
+navigation = st.sidebar.radio("Navigation", PAGES, index=page_idx)
 
 
 # ============================================================================
