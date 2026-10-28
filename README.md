@@ -176,7 +176,7 @@ Open your browser at `http://localhost:8501`.
 
 ## 8. Automated Testing
 
-Run the comprehensive automated test suite (79 unit, integration, and UI tests covering all modules):
+Run the comprehensive automated test suite (82 unit, integration, and UI tests covering all modules):
 
 ```bash
 # Using the test runner script:
@@ -387,6 +387,7 @@ OpenDataGuard/
 │   ├── test_reconciliation.py  # Reconciliation engine tests
 │   ├── test_reports.py         # Report generation tests
 │   ├── test_rules.py           # Declarative rule engine tests
+│   ├── test_ui_app.py          # Streamlit UI page & rendering tests
 │   └── test_validators.py      # Validator & ingestion unit tests
 ├── examples/
 │   ├── sample_source.csv       # Synthetic source with intentional defects

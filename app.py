@@ -155,12 +155,13 @@ if navigation == "📊 Overview":
     history_df = history_mgr.get_history(limit=100)
 
     total_runs = len(history_df)
-    avg_score = round(history_df["dq_score"].mean(), 1) if not history_df.empty else 100.0
+    avg_score = round(history_df["dq_score"].mean(), 1) if not history_df.empty else None
+    avg_score_str = f"{avg_score}%" if avg_score is not None else "N/A"
     total_checks_run = int(history_df["total_checks"].sum()) if not history_df.empty else 0
     total_rows_inspected = int(history_df["total_rows"].sum()) if not history_df.empty else 0
 
     col1.metric("Audited Runs", f"{total_runs:,}")
-    col2.metric("Average DQ Score", f"{avg_score}%")
+    col2.metric("Average DQ Score", avg_score_str)
     col3.metric("Total Rules Run", f"{total_checks_run:,}")
     col4.metric("Total Rows Evaluated", f"{total_rows_inspected:,}")
 
@@ -253,14 +254,18 @@ elif navigation == "📁 Dataset Explorer":
     current_meta = st.session_state.get("current_metadata")
 
     if current_df is not None and current_meta is not None:
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Rows", f"{current_meta.row_count:,}")
         m2.metric("Columns", f"{current_meta.column_count}")
-        m3.metric("Memory Footprint", f"{current_meta.memory_usage_mb()} MB")
-        m4.metric("Empty Columns", f"{len(current_meta.empty_columns)}")
+        m3.metric("Duplicate Rows", f"{int(current_df.duplicated().sum()):,}")
+        m4.metric("Memory Footprint", f"{current_meta.memory_usage_mb()} MB")
+        m5.metric("Empty Columns", f"{len(current_meta.empty_columns)}")
 
         st.markdown("### Data Preview (First 50 Rows)")
         st.dataframe(current_df.head(50), use_container_width=True)
+
+        with st.expander("📊 Basic Statistical Summary (df.describe)", expanded=False):
+            st.dataframe(current_df.describe(include="all"), use_container_width=True)
 
         st.markdown("### Schema & Column Profiling")
         profile_data = []

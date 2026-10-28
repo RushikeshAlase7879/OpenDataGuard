@@ -376,3 +376,37 @@ def test_validators_do_not_mutate_input_dataframe(sample_df):
     pd.testing.assert_frame_equal(sample_df, df_copy)
 
 
+def test_default_max_file_size_env_var(monkeypatch):
+    from opendataguard.validators import get_default_max_file_size_bytes, validate_file_safety
+    
+    # Default without env var
+    monkeypatch.delenv("OPENDATAGUARD_MAX_UPLOAD_BYTES", raising=False)
+    assert get_default_max_file_size_bytes() == 100 * 1024 * 1024
+
+    # Custom valid env var
+    monkeypatch.setenv("OPENDATAGUARD_MAX_UPLOAD_BYTES", "52428800")
+    assert get_default_max_file_size_bytes() == 52428800
+
+    # Invalid env var fallback
+    monkeypatch.setenv("OPENDATAGUARD_MAX_UPLOAD_BYTES", "not-a-number")
+    assert get_default_max_file_size_bytes() == 100 * 1024 * 1024
+
+
+def test_validate_file_safety_uses_env_var(monkeypatch):
+    from opendataguard.validators import validate_file_safety
+    
+    # Set limit to 50 bytes
+    monkeypatch.setenv("OPENDATAGUARD_MAX_UPLOAD_BYTES", "50")
+    
+    content_ok = b"a,b,c\n1,2,3\n"
+    content_too_large = b"a" * 100
+    
+    ext, sz = validate_file_safety(io.BytesIO(content_ok), filename="test.csv")
+    assert ext == ".csv"
+    assert sz == len(content_ok)
+    
+    with pytest.raises(ValueError, match="exceeds maximum allowed limit"):
+        validate_file_safety(io.BytesIO(content_too_large), filename="large.csv")
+
+
+

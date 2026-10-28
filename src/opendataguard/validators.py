@@ -1,7 +1,7 @@
 """Data validation engine and safe dataset ingestion for OpenDataGuard.
 
-Provides safe loading for CSV and Excel files, robust error handling,
-and 10 comprehensive data quality checks returning structured results.
+Provides safe loading for CSV, TSV, and Excel files, robust error handling,
+and 12 comprehensive data quality checks returning structured results.
 """
 
 from __future__ import annotations
@@ -18,8 +18,19 @@ import pandas as pd
 
 from opendataguard.logging_config import logger
 
+def get_default_max_file_size_bytes() -> int:
+    """Return default maximum file size in bytes, configurable via OPENDATAGUARD_MAX_UPLOAD_BYTES."""
+    env_val = os.getenv("OPENDATAGUARD_MAX_UPLOAD_BYTES")
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            pass
+    return 100 * 1024 * 1024
+
+
 # Maximum allowed upload size in bytes (default 100 MB to avoid memory exhaustion)
-DEFAULT_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
+DEFAULT_MAX_FILE_SIZE_BYTES = get_default_max_file_size_bytes()
 
 
 @dataclass
@@ -67,14 +78,14 @@ class DatasetMetadata:
 def validate_file_safety(
     file_input: Union[str, Path, io.BytesIO, bytes],
     filename: Optional[str] = None,
-    max_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
+    max_size_bytes: Optional[int] = None,
 ) -> Tuple[str, int]:
     """Validate file existence, extension, and size safety.
 
     Args:
         file_input: Path, BytesIO buffer, or raw bytes.
         filename: Optional filename hint when passing buffer/bytes.
-        max_size_bytes: Maximum allowed size in bytes.
+        max_size_bytes: Maximum allowed size in bytes (defaults to OPENDATAGUARD_MAX_UPLOAD_BYTES or 100MB).
 
     Returns:
         Tuple of (clean_file_extension, file_size_in_bytes).
@@ -83,6 +94,9 @@ def validate_file_safety(
         ValueError: If file is empty, exceeds size limit, or has unsupported extension.
         FileNotFoundError: If a file path is provided that does not exist.
     """
+    if max_size_bytes is None:
+        max_size_bytes = get_default_max_file_size_bytes()
+
     clean_name = filename or ""
     size_bytes = 0
 
@@ -123,7 +137,7 @@ def validate_file_safety(
 def load_dataset(
     file_input: Union[str, Path, io.BytesIO, bytes],
     filename: Optional[str] = None,
-    max_size_bytes: int = DEFAULT_MAX_FILE_SIZE_BYTES,
+    max_size_bytes: Optional[int] = None,
     encoding: Optional[str] = None,
     sheet_name: Union[str, int] = 0,
 ) -> Tuple[pd.DataFrame, DatasetMetadata]:
@@ -135,7 +149,7 @@ def load_dataset(
     Args:
         file_input: File path, BytesIO, or raw bytes.
         filename: Optional name for reference.
-        max_size_bytes: Maximum allowed size.
+        max_size_bytes: Maximum allowed size (defaults to OPENDATAGUARD_MAX_UPLOAD_BYTES or 100MB).
         encoding: Specific CSV encoding to try first.
         sheet_name: Excel sheet index or name (defaults to first sheet).
 
@@ -145,6 +159,8 @@ def load_dataset(
     Raises:
         ValueError: If file is empty, malformed, or cannot be parsed.
     """
+    if max_size_bytes is None:
+        max_size_bytes = get_default_max_file_size_bytes()
     ext, size_bytes = validate_file_safety(file_input, filename, max_size_bytes)
     resolved_name = filename or (Path(file_input).name if isinstance(file_input, (str, Path)) else "dataset")
 

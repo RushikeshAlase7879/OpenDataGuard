@@ -65,7 +65,7 @@ Run the automated test runner:
 ```bash
 python scripts/run_tests.py
 ```
-You should see all 79 test cases pass across unit, integration, and UI modules.
+You should see all 82 test cases pass across unit, integration, and UI modules.
 
 ---
 
