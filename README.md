@@ -43,6 +43,13 @@ OpenDataGuard solves these problems with a 100% local, safe, open-source engine 
   9. Categorical domain membership (allowed values).
   10. Schema and column mismatch detection (missing and unexpected columns).
 
+- **📈 Continuous Data Quality Score (0.0% – 100.0%)**:
+  - Deterministic scoring computed across all executed assertions:
+    $$\text{DQ Score} = \left(\frac{1}{N} \sum_{i=1}^{N} \text{check\_score}_i\right) \times 100$$
+  - Row-level checks: $\text{check\_score} = \max\left(0.0, 1.0 - \frac{\text{failed\_records}}{\text{total\_records}}\right)$.
+  - Structural / schema checks: binary scoring ($1.0$ if passed, $0.0$ if failed).
+  - Defaults safely to $100.0\%$ if no rules are specified.
+
 - **🔄 Two-Way Dataset Reconciliation**:
   - Key-based 1-to-1 diff between Source and Target datasets.
   - Cell-by-cell discrepancy tracking.
@@ -142,6 +149,9 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
+
+# Optional: Install PostgreSQL support driver
+pip install -e .[postgres]  # Or: pip install psycopg2-binary
 ```
 
 ---
@@ -158,7 +168,7 @@ Open your browser at `http://localhost:8501`.
 
 ## 8. Automated Testing
 
-Run the comprehensive automated test suite (41 unit tests covering all modules):
+Run the comprehensive automated test suite (42 unit and integration tests covering all modules):
 
 ```bash
 # Using the test runner script:
@@ -269,12 +279,13 @@ OpenDataGuard/
 │       └── logging_config.py   # Secure credential-masking logger
 ├── tests/
 │   ├── __init__.py
-│   ├── test_validators.py      # Validator & ingestion unit tests
-│   ├── test_reconciliation.py  # Reconciliation engine tests
-│   ├── test_rules.py           # Declarative rule engine tests
-│   ├── test_reports.py         # Report generation tests
 │   ├── test_database.py        # Database inspection tests
-│   └── test_history.py         # History manager tests
+│   ├── test_e2e_features.py    # End-to-end integration tests
+│   ├── test_history.py         # History manager tests
+│   ├── test_reconciliation.py  # Reconciliation engine tests
+│   ├── test_reports.py         # Report generation tests
+│   ├── test_rules.py           # Declarative rule engine tests
+│   └── test_validators.py      # Validator & ingestion unit tests
 ├── examples/
 │   ├── sample_source.csv       # Synthetic source with intentional defects
 │   ├── sample_source_deduped.csv # Cleaned source for reconciliation
