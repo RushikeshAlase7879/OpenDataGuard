@@ -35,7 +35,7 @@ opendataguard validate -d <DATA_PATH> -r <RULES_PATH> [options]
 #### Options
 | Flag | Long Option | Required | Type / Choices | Default | Description |
 | :--- | :--- | :---: | :--- | :--- | :--- |
-| `-d` | `--data` | **Yes** | Path | N/A | Path to input dataset file (`.csv`, `.tsv`, `.xlsx`, `.xls`). |
+| `-d` | `--data` | **Yes** | Path | N/A | Path to input dataset file (`.csv`, `.tsv`, `.xlsx`, `.xls`, `.parquet`). |
 | `-r` | `--rules` | **Yes** | Path | N/A | Path to declarative rule definition file (`.json` or `.yaml`). |
 | `-o` | `--output` | No | Path | `None` | Path to save the generated audit report (e.g. `report.json`, `report.xlsx`, `report.csv`). |
 | `-f` | `--format` | No | `json`, `csv`, `xlsx` | Inferred | Output format. Overrides output file extension. |
@@ -74,8 +74,8 @@ opendataguard reconcile -s <SOURCE_PATH> -t <TARGET_PATH> -k <KEYS...> [options]
 #### Options
 | Flag | Long Option | Required | Type / Choices | Default | Description |
 | :--- | :--- | :---: | :--- | :--- | :--- |
-| `-s` | `--source` | **Yes** | Path | N/A | Path to source dataset file (`.csv`, `.xlsx`). |
-| `-t` | `--target` | **Yes** | Path | N/A | Path to target dataset file (`.csv`, `.xlsx`). |
+| `-s` | `--source` | **Yes** | Path | N/A | Path to source dataset file (`.csv`, `.xlsx`, `.parquet`). |
+| `-t` | `--target` | **Yes** | Path | N/A | Path to target dataset file (`.csv`, `.xlsx`, `.parquet`). |
 | `-k` | `--keys` | **Yes** | String(s) | N/A | Primary or composite key column names. Accepts space- or comma-separated lists. |
 | | `--source-name` | No | String | Source file stem | Label for source dataset in reports. |
 | | `--target-name` | No | String | Target file stem | Label for target dataset in reports. |

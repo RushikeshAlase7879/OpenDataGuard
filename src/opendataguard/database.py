@@ -121,19 +121,57 @@ def create_safe_engine(config: DatabaseConfig, timeout_seconds: int = 5) -> Engi
         raise ConnectionError(f"Database connection error: {exc}") from None
 
 
-def list_database_tables(engine: Engine) -> List[str]:
-    """Inspect and return list of user table names in the database.
+def list_database_schemas(engine: Engine) -> List[str]:
+    """Inspect and return list of database schemas if supported by dialect.
+
+    Note:
+        PostgreSQL, SQL Server, and Oracle support distinct database schemas.
+        SQLite uses attached databases rather than standard multi-tenant schemas;
+        its inspector typically returns schema 'main'.
 
     Args:
         engine: Connected SQLAlchemy engine.
 
     Returns:
-        Sorted list of table names.
+        Sorted list of schema names, or empty list if schemas are unsupported.
     """
     try:
         inspector = inspect(engine)
-        tables = inspector.get_table_names()
+        schemas = inspector.get_schema_names()
+        return sorted(schemas)
+    except (SQLAlchemyError, NotImplementedError) as err:
+        logger.debug("Database dialect does not support schema reflection: %s", err)
+        return []
+
+
+def list_database_tables(engine: Engine, schema: Optional[str] = None) -> List[str]:
+    """Inspect and return list of user table names in the database.
+
+    Args:
+        engine: Connected SQLAlchemy engine.
+        schema: Optional database schema name (e.g. 'public', 'analytics').
+
+    Returns:
+        Sorted list of table names.
+
+    Raises:
+        ValueError: If specified schema does not exist.
+        RuntimeError: If database table inspection fails.
+    """
+    try:
+        inspector = inspect(engine)
+        if schema:
+            try:
+                available_schemas = inspector.get_schema_names()
+                if available_schemas and schema not in available_schemas:
+                    raise ValueError(f"Schema '{schema}' does not exist in database.")
+            except (NotImplementedError, SQLAlchemyError):
+                pass
+
+        tables = inspector.get_table_names(schema=schema)
         return sorted(tables)
+    except ValueError:
+        raise
     except SQLAlchemyError as err:
         logger.error("Failed to inspect table list: %s", err)
         raise RuntimeError(f"Could not retrieve database tables: {err}") from err
@@ -143,6 +181,7 @@ def inspect_table_schema(
     engine: Engine,
     table_name: str,
     valid_tables: Optional[Iterable[str]] = None,
+    schema: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Return column definitions and primary keys for a selected table.
 
@@ -150,6 +189,7 @@ def inspect_table_schema(
         engine: Connected SQLAlchemy engine.
         table_name: Table name to inspect.
         valid_tables: Optional pre-validated collection of table names.
+        schema: Optional schema name.
 
     Returns:
         List of column metadata dictionaries.
@@ -157,17 +197,18 @@ def inspect_table_schema(
     Raises:
         ValueError: If table does not exist or is invalid.
     """
+    schema_label = f" (schema: {schema})" if schema else ""
     if valid_tables is not None:
         if table_name not in valid_tables:
-            raise ValueError(f"Table '{table_name}' does not exist in database catalog.")
+            raise ValueError(f"Table '{table_name}' does not exist in database catalog{schema_label}.")
     else:
         inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            raise ValueError(f"Table '{table_name}' does not exist in database catalog.")
+        if not inspector.has_table(table_name, schema=schema):
+            raise ValueError(f"Table '{table_name}' does not exist in database catalog{schema_label}.")
 
     inspector = inspect(engine)
-    columns = inspector.get_columns(table_name)
-    pk_constraint = inspector.get_pk_constraint(table_name)
+    columns = inspector.get_columns(table_name, schema=schema)
+    pk_constraint = inspector.get_pk_constraint(table_name, schema=schema)
     pks = set(pk_constraint.get("constrained_columns", []))
 
     schema_info = []
@@ -187,6 +228,7 @@ def get_table_row_count(
     engine: Engine,
     table_name: str,
     valid_tables: Optional[Iterable[str]] = None,
+    schema: Optional[str] = None,
 ) -> int:
     """Safely count rows in a database table without string interpolation.
 
@@ -194,6 +236,7 @@ def get_table_row_count(
         engine: Connected SQLAlchemy engine.
         table_name: Validated table name.
         valid_tables: Optional pre-validated collection of table names.
+        schema: Optional schema name.
 
     Returns:
         Total row count.
@@ -201,19 +244,20 @@ def get_table_row_count(
     Raises:
         ValueError: If table is not found in database catalog.
     """
+    schema_label = f" (schema: {schema})" if schema else ""
     if valid_tables is not None:
         if table_name not in valid_tables:
-            raise ValueError(f"Table '{table_name}' not found in database catalog.")
+            raise ValueError(f"Table '{table_name}' not found in database catalog{schema_label}.")
     else:
         inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            raise ValueError(f"Table '{table_name}' not found in database catalog.")
+        if not inspector.has_table(table_name, schema=schema):
+            raise ValueError(f"Table '{table_name}' not found in database catalog{schema_label}.")
 
-    metadata = MetaData()
+    metadata = MetaData(schema=schema)
     try:
-        tbl = Table(table_name, metadata, autoload_with=engine)
+        tbl = Table(table_name, metadata, schema=schema, autoload_with=engine)
     except NoSuchTableError:
-        raise ValueError(f"Table '{table_name}' not found in database catalog.")
+        raise ValueError(f"Table '{table_name}' not found in database catalog{schema_label}.")
 
     stmt = select(func.count()).select_from(tbl)
 
@@ -227,6 +271,7 @@ def fetch_table_sample(
     table_name: str,
     limit: int = 10_000,
     valid_tables: Optional[Iterable[str]] = None,
+    schema: Optional[str] = None,
 ) -> pd.DataFrame:
     """Safely fetch sample or full data from a table into a pandas DataFrame.
 
@@ -237,6 +282,7 @@ def fetch_table_sample(
         table_name: Target table name.
         limit: Maximum number of rows to retrieve.
         valid_tables: Optional pre-validated collection of table names.
+        schema: Optional schema name.
 
     Returns:
         pd.DataFrame containing table rows.
@@ -244,24 +290,25 @@ def fetch_table_sample(
     Raises:
         ValueError: If table is not found in database catalog.
     """
+    schema_label = f" (schema: {schema})" if schema else ""
     if valid_tables is not None:
         if table_name not in valid_tables:
-            raise ValueError(f"Table '{table_name}' not found in database catalog.")
+            raise ValueError(f"Table '{table_name}' not found in database catalog{schema_label}.")
     else:
         inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            raise ValueError(f"Table '{table_name}' not found in database catalog.")
+        if not inspector.has_table(table_name, schema=schema):
+            raise ValueError(f"Table '{table_name}' not found in database catalog{schema_label}.")
 
-    metadata = MetaData()
+    metadata = MetaData(schema=schema)
     try:
-        tbl = Table(table_name, metadata, autoload_with=engine)
+        tbl = Table(table_name, metadata, schema=schema, autoload_with=engine)
     except NoSuchTableError:
-        raise ValueError(f"Table '{table_name}' not found in database catalog.")
+        raise ValueError(f"Table '{table_name}' not found in database catalog{schema_label}.")
 
     stmt = select(tbl).limit(limit)
 
     with engine.connect() as conn:
         df = pd.read_sql(stmt, conn)
 
-    logger.info("Retrieved %d rows from table '%s' (limit=%d)", len(df), table_name, limit)
+    logger.info("Retrieved %d rows from table '%s'%s (limit=%d)", len(df), table_name, schema_label, limit)
     return df

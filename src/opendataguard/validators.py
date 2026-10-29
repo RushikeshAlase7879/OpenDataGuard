@@ -125,7 +125,7 @@ def validate_file_safety(
 
     # Validate file extension
     ext = Path(clean_name).suffix.lower() if clean_name else ""
-    supported_extensions = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+    supported_extensions = {".csv", ".tsv", ".txt", ".xlsx", ".xls", ".parquet"}
     if ext and ext not in supported_extensions:
         raise ValueError(
             f"Unsupported file format '{ext}'. OpenDataGuard supports: {', '.join(sorted(supported_extensions))}"
@@ -173,6 +173,36 @@ def load_dataset(
         except Exception as exc:
             logger.error("Failed to read Excel file %s: %s", resolved_name, exc)
             raise ValueError(f"Unable to parse Excel file '{resolved_name}': {exc}") from exc
+    elif ext == ".parquet":
+        # Check parquet engine availability
+        engine = None
+        try:
+            import pyarrow  # noqa: F401
+            engine = "pyarrow"
+        except ImportError:
+            try:
+                import fastparquet  # noqa: F401
+                engine = "fastparquet"
+            except ImportError:
+                raise ImportError(
+                    "Reading Parquet files requires 'pyarrow' or 'fastparquet'. "
+                    "Install optional dependencies with: pip install 'opendataguard[parquet]' or pip install pyarrow"
+                ) from None
+
+        try:
+            if isinstance(file_input, bytes):
+                file_buf: Union[io.BytesIO, str, Path] = io.BytesIO(file_input)
+            elif isinstance(file_input, io.BytesIO):
+                file_input.seek(0)
+                file_buf = file_input
+            else:
+                file_buf = file_input
+
+            df = pd.read_parquet(file_buf, engine=engine)
+            logger.info("Successfully loaded Parquet '%s' using engine '%s'", resolved_name, engine)
+        except Exception as exc:
+            logger.error("Failed to read Parquet file %s: %s", resolved_name, exc)
+            raise ValueError(f"Unable to parse Parquet file '{resolved_name}': {exc}") from exc
     else:
         # Default to CSV/TSV/delimiter parsing
         encodings_to_try = [encoding] if encoding else ["utf-8", "utf-8-sig", "latin1", "cp1252", "iso-8859-1"]
@@ -1138,6 +1168,133 @@ def check_row_count(
         passed=passed,
         message=msg,
         details={"min_rows": min_rows, "max_rows": max_rows, "expected_rows": expected_rows, "actual_rows": total},
+    )
+
+
+def check_column_comparison(
+    df: pd.DataFrame,
+    col_a: str,
+    col_b: str,
+    operator: str = ">=",
+    allow_nulls: bool = True,
+    max_samples: int = 10,
+) -> ValidationResult:
+    """Validate relational comparison between two columns in a DataFrame.
+
+    Supported operators: '>=', '>', '<=', '<', '==', '!=', '='.
+
+    Args:
+        df: Input DataFrame.
+        col_a: Left column name.
+        col_b: Right column name.
+        operator: Relational comparison operator.
+        allow_nulls: If True, rows where either column is null are not considered failures.
+        max_samples: Maximum failing sample records to extract.
+
+    Returns:
+        ValidationResult.
+
+    Raises:
+        ValueError: If unsupported operator is supplied.
+    """
+    total = len(df)
+    op = operator.strip()
+    valid_operators = {">=", ">", "<=", "<", "==", "!=", "="}
+    if op not in valid_operators:
+        raise ValueError(
+            f"Unsupported comparison operator '{operator}'. Supported operators: {', '.join(sorted(valid_operators))}"
+        )
+
+    # Check column existence
+    missing_cols = [c for c in [col_a, col_b] if c not in df.columns]
+    if missing_cols:
+        return ValidationResult(
+            check_name="column_comparison",
+            column_name=f"{col_a} vs {col_b}",
+            total_records=total,
+            failed_records=total,
+            passed=False,
+            message=f"Missing column(s) for comparison: {', '.join(missing_cols)}",
+            details={"operator": op, "missing_columns": missing_cols},
+        )
+
+    if total == 0:
+        return ValidationResult(
+            check_name="column_comparison",
+            column_name=f"{col_a} vs {col_b}",
+            total_records=0,
+            failed_records=0,
+            passed=True,
+            message="No records to evaluate.",
+            details={"operator": op},
+        )
+
+    series_a = df[col_a]
+    series_b = df[col_b]
+
+    # Try numeric conversion if both can be numeric
+    s_a = pd.to_numeric(series_a, errors="coerce")
+    s_b = pd.to_numeric(series_b, errors="coerce")
+    both_numeric = (s_a.notna() | series_a.isna()).all() and (s_b.notna() | series_b.isna()).all()
+
+    if both_numeric:
+        val_a, val_b = s_a, s_b
+    else:
+        # Check datetime
+        dt_a = pd.to_datetime(series_a, errors="coerce")
+        dt_b = pd.to_datetime(series_b, errors="coerce")
+        both_dt = (dt_a.notna() | series_a.isna()).all() and (dt_b.notna() | series_b.isna()).all()
+        if both_dt:
+            val_a, val_b = dt_a, dt_b
+        else:
+            val_a, val_b = series_a, series_b
+
+    null_mask = val_a.isna() | val_b.isna()
+
+    if op == ">=":
+        cmp_mask = val_a >= val_b
+    elif op == ">":
+        cmp_mask = val_a > val_b
+    elif op == "<=":
+        cmp_mask = val_a <= val_b
+    elif op == "<":
+        cmp_mask = val_a < val_b
+    elif op in ("==", "="):
+        cmp_mask = val_a == val_b
+    elif op == "!=":
+        cmp_mask = val_a != val_b
+
+    if allow_nulls:
+        failed_mask = ~null_mask & ~cmp_mask
+    else:
+        failed_mask = null_mask | ~cmp_mask
+
+    failed_count = int(failed_mask.sum())
+    passed = failed_count == 0
+
+    if passed:
+        msg = f"Comparison assertion '{col_a} {op} {col_b}' passed across all records."
+    else:
+        pct = (failed_count / total * 100) if total > 0 else 0.0
+        msg = f"Comparison assertion '{col_a} {op} {col_b}' failed for {failed_count} of {total} records ({pct:.2f}%)."
+
+    sample_df = df.loc[failed_mask, [col_a, col_b]].head(max_samples)
+    samples = sample_df.to_dict(orient="records") if not sample_df.empty else []
+
+    return ValidationResult(
+        check_name="column_comparison",
+        column_name=f"{col_a} vs {col_b}",
+        total_records=total,
+        failed_records=failed_count,
+        passed=passed,
+        message=msg,
+        failing_sample=samples,
+        details={
+            "col_a": col_a,
+            "col_b": col_b,
+            "operator": op,
+            "allow_nulls": allow_nulls,
+        },
     )
 
 

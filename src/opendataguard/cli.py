@@ -144,13 +144,13 @@ def _handle_validate(args: argparse.Namespace) -> int:
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             if out_format == "xlsx":
-                excel_bytes = generate_validation_excel(
+                generate_validation_excel(
                     results=results,
                     dataset_name=dataset_name,
                     row_count=len(df),
                     column_count=len(df.columns),
+                    output_file=out_path,
                 )
-                out_path.write_bytes(excel_bytes)
             elif out_format == "csv":
                 csv_str = generate_validation_csv(
                     results=results,
@@ -298,8 +298,7 @@ def _handle_reconcile(args: argparse.Namespace) -> int:
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             if out_format == "xlsx":
-                excel_bytes = generate_reconciliation_excel(result)
-                out_path.write_bytes(excel_bytes)
+                generate_reconciliation_excel(result, output_file=out_path)
             else:
                 report_dict = {
                     "summary": s.to_dict(),

@@ -91,3 +91,75 @@ def test_history_records_both_passed_and_failed_runs(temp_history_mgr):
     assert det_pass["failed_checks"] == 0
     assert det_fail["failed_checks"] == 1
 
+
+def test_reconciliation_history_record_and_get(temp_history_mgr):
+    from opendataguard.reconciliation import reconcile_datasets
+
+    src = pd.DataFrame({"id": [1, 2], "val": ["a", "b"]})
+    tgt = pd.DataFrame({"id": [1, 2], "val": ["a", "c"]})
+    res = reconcile_datasets(src, tgt, key_columns=["id"], source_name="src_data", target_name="tgt_data")
+
+    run_id = temp_history_mgr.record_reconciliation_run(res)
+    assert run_id is not None
+
+    recon_df = temp_history_mgr.get_reconciliation_history()
+    assert len(recon_df) == 1
+    assert recon_df.iloc[0]["source_name"] == "src_data"
+    assert recon_df.iloc[0]["target_name"] == "tgt_data"
+    assert recon_df.iloc[0]["mismatched_records"] == 1
+    assert recon_df.iloc[0]["matched_records"] == 1
+    assert recon_df.iloc[0]["status"] == "DISCREPANCIES"
+
+
+def test_reconciliation_history_run_details(temp_history_mgr):
+    from opendataguard.reconciliation import reconcile_datasets
+
+    src = pd.DataFrame({"id": [1, 2], "val": ["a", "b"], "status": ["OK", "WARN"]})
+    tgt = pd.DataFrame({"id": [1, 2], "val": ["a", "z"], "status": ["OK", "ERR"]})
+    res = reconcile_datasets(src, tgt, key_columns=["id"])
+
+    run_id = temp_history_mgr.record_reconciliation_run(res)
+    details = temp_history_mgr.get_reconciliation_run_details(run_id)
+
+    assert details is not None
+    assert details["run_id"] == run_id
+    assert details["matched_records"] == 1
+    assert details["mismatched_records"] == 1
+    assert "val" in details["column_mismatches"]
+    assert "status" in details["column_mismatches"]
+
+
+def test_reconciliation_history_persistence_across_restarts(tmp_path):
+    from opendataguard.reconciliation import reconcile_datasets
+
+    db_file = tmp_path / "recon_persistence.db"
+    mgr1 = HistoryManager(db_path=db_file)
+
+    src = pd.DataFrame({"id": [10], "amt": [100.0]})
+    tgt = pd.DataFrame({"id": [10], "amt": [100.0]})
+    res = reconcile_datasets(src, tgt, key_columns=["id"], source_name="s1", target_name="t1")
+    run_id = mgr1.record_reconciliation_run(res)
+
+    mgr2 = HistoryManager(db_path=db_file)
+    hist_df = mgr2.get_reconciliation_history()
+    assert len(hist_df) == 1
+    assert hist_df.iloc[0]["run_id"] == run_id
+    assert hist_df.iloc[0]["status"] == "MATCHED"
+
+
+def test_reconciliation_history_clear(temp_history_mgr):
+    from opendataguard.reconciliation import reconcile_datasets
+
+    src = pd.DataFrame({"id": [1], "v": [10]})
+    tgt = pd.DataFrame({"id": [1], "v": [10]})
+    res = reconcile_datasets(src, tgt, key_columns=["id"])
+    temp_history_mgr.record_reconciliation_run(res)
+
+    assert len(temp_history_mgr.get_reconciliation_history()) == 1
+    temp_history_mgr.clear_reconciliation_history()
+    assert len(temp_history_mgr.get_reconciliation_history()) == 0
+
+
+def test_reconciliation_history_nonexistent_run_returns_none(temp_history_mgr):
+    assert temp_history_mgr.get_reconciliation_run_details("non-existent-uuid") is None
+

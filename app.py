@@ -237,8 +237,8 @@ elif navigation == "📁 Dataset Explorer":
 
     if upload_source == "Upload File":
         uploaded_file = st.file_uploader(
-            "Upload CSV or Excel file (Max 100MB):",
-            type=["csv", "tsv", "xlsx", "xls"],
+            "Upload CSV, Excel, or Parquet file (Max 100MB):",
+            type=["csv", "tsv", "xlsx", "xls", "parquet"],
             help="Securely parsed locally. Source data is never modified.",
         )
         if uploaded_file is not None:
@@ -547,7 +547,7 @@ elif navigation == "🔄 Dataset Reconciliation":
         st.markdown("#### Source Dataset (e.g. Staging / Upstream)")
         src_mode = st.radio("Source Input:", ["Upload Source", "Load Synthetic Source"], horizontal=True, key="src_mode")
         if src_mode == "Upload Source":
-            f_src = st.file_uploader("Upload Source CSV/Excel:", type=["csv", "xlsx"], key="f_src")
+            f_src = st.file_uploader("Upload Source CSV/Excel/Parquet:", type=["csv", "tsv", "xlsx", "parquet"], key="f_src")
             if f_src is not None:
                 df_s, _ = load_dataset(io.BytesIO(f_src.read()), filename=f_src.name)
                 st.session_state["source_df"] = df_s
@@ -561,7 +561,7 @@ elif navigation == "🔄 Dataset Reconciliation":
         st.markdown("#### Target Dataset (e.g. Warehouse / Downstream)")
         tgt_mode = st.radio("Target Input:", ["Upload Target", "Load Synthetic Target"], horizontal=True, key="tgt_mode")
         if tgt_mode == "Upload Target":
-            f_tgt = st.file_uploader("Upload Target CSV/Excel:", type=["csv", "xlsx"], key="f_tgt")
+            f_tgt = st.file_uploader("Upload Target CSV/Excel/Parquet:", type=["csv", "tsv", "xlsx", "parquet"], key="f_tgt")
             if f_tgt is not None:
                 df_t, _ = load_dataset(io.BytesIO(f_tgt.read()), filename=f_tgt.name)
                 st.session_state["target_df"] = df_t

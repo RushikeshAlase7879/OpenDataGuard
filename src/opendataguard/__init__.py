@@ -9,6 +9,7 @@ from opendataguard.database import (
     fetch_table_sample,
     get_table_row_count,
     inspect_table_schema,
+    list_database_schemas,
     list_database_tables,
 )
 from opendataguard.history import HistoryManager, get_history_db_path
@@ -36,6 +37,7 @@ from opendataguard.validators import (
     ValidationResult,
     calculate_data_quality_score,
     check_allowed_values,
+    check_column_comparison,
     check_data_types,
     check_date_validity,
     check_duplicate_rows,
@@ -69,6 +71,7 @@ __all__ = [
     "read_csv_in_chunks",
     # Validators
     "check_missing_values",
+    "check_column_comparison",
     "check_duplicate_rows",
     "check_key_uniqueness",
     "check_data_types",
@@ -93,6 +96,7 @@ __all__ = [
     # Database
     "create_safe_engine",
     "list_database_tables",
+    "list_database_schemas",
     "inspect_table_schema",
     "get_table_row_count",
     "fetch_table_sample",

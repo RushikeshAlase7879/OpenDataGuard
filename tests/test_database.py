@@ -190,3 +190,60 @@ def test_database_fast_has_table_reflection(sqlite_engine):
 
     with pytest.raises(ValueError, match="not found in database catalog"):
         fetch_table_sample(sqlite_engine, "non_existent_quick_check")
+
+
+def test_list_database_schemas_sqlite(sqlite_engine):
+    """SQLite engine should return valid schemas list (such as ['main'])."""
+    from opendataguard.database import list_database_schemas
+
+    schemas = list_database_schemas(sqlite_engine)
+    assert isinstance(schemas, list)
+    assert len(schemas) >= 1
+    assert "main" in schemas
+
+
+def test_list_database_tables_with_schema(sqlite_engine):
+    """Specifying schema='main' on SQLite should return tables in main schema."""
+    tables = list_database_tables(sqlite_engine, schema="main")
+    assert "test_users" in tables
+
+
+def test_database_nonexistent_schema_raises(sqlite_engine):
+    """Specifying an unknown schema when schema reflection is supported raises ValueError."""
+    with pytest.raises(ValueError, match="Schema 'nonexistent_schema' does not exist"):
+        list_database_tables(sqlite_engine, schema="nonexistent_schema")
+
+
+def test_mock_multischema_database_inspection():
+    """Verify schema parameter propagation to inspect, columns, count, and sampling."""
+    from unittest.mock import MagicMock, patch
+    from opendataguard.database import (
+        list_database_schemas,
+        list_database_tables,
+        inspect_table_schema,
+    )
+
+    mock_engine = MagicMock()
+    mock_inspector = MagicMock()
+    mock_inspector.get_schema_names.return_value = ["analytics", "public"]
+    mock_inspector.get_table_names.return_value = ["daily_active_users"]
+    mock_inspector.has_table.return_value = True
+    mock_inspector.get_columns.return_value = [
+        {"name": "user_id", "type": "INTEGER", "nullable": False, "default": None},
+        {"name": "event_date", "type": "DATE", "nullable": False, "default": None},
+    ]
+    mock_inspector.get_pk_constraint.return_value = {"constrained_columns": ["user_id", "event_date"]}
+
+    with patch("opendataguard.database.inspect", return_value=mock_inspector):
+        schemas = list_database_schemas(mock_engine)
+        assert schemas == ["analytics", "public"]
+
+        tables = list_database_tables(mock_engine, schema="analytics")
+        assert tables == ["daily_active_users"]
+        mock_inspector.get_table_names.assert_called_with(schema="analytics")
+
+        col_defs = inspect_table_schema(mock_engine, "daily_active_users", schema="analytics")
+        assert len(col_defs) == 2
+        assert col_defs[0]["name"] == "user_id"
+        assert col_defs[0]["is_primary_key"] is True
+        mock_inspector.get_columns.assert_called_with("daily_active_users", schema="analytics")

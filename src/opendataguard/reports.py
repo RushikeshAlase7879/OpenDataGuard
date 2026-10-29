@@ -118,13 +118,15 @@ def generate_validation_excel(
     row_count: Optional[int] = None,
     column_count: Optional[int] = None,
     timestamp_utc: Optional[str] = None,
+    max_sample_rows: int = 5_000,
+    output_file: Optional[Union[str, Path]] = None,
 ) -> bytes:
-    """Generate a multi-tab Excel validation workbook.
+    """Generate a multi-tab Excel validation workbook with memory-bounded sample rows.
 
     Sheets:
     1. Summary - Metadata, overall score, pass/fail counters.
     2. Detailed Checks - Full check table.
-    3. Failed Samples - Individual sample records from failing checks.
+    3. Failed Samples - Individual sample records from failing checks (capped at max_sample_rows).
 
     Args:
         results: List of ValidationResult items.
@@ -132,9 +134,11 @@ def generate_validation_excel(
         row_count: Total row count (optional if DatasetMetadata passed).
         column_count: Total column count (optional if DatasetMetadata passed).
         timestamp_utc: Timestamp.
+        max_sample_rows: Maximum failing sample rows written to Excel sheet.
+        output_file: Optional direct file path for disk streaming.
 
     Returns:
-        Excel workbook as bytes.
+        Excel workbook as bytes (or empty bytes if output_file was provided).
     """
     resolved_name = dataset_name
     if hasattr(dataset_name, "name") and hasattr(dataset_name, "row_count"):
@@ -178,38 +182,47 @@ def generate_validation_excel(
             "Failed Records": r.failed_records,
             "Message": r.message,
         })
-        if r.failing_sample:
-            for s in r.failing_sample:
+        if r.failing_sample and len(sample_rows) < max_sample_rows:
+            remaining_slots = max_sample_rows - len(sample_rows)
+            for s in r.failing_sample[:remaining_slots]:
                 sample_item = {"Check Name": r.check_name, "Column": r.column_name or "N/A", **s}
                 sample_rows.append(sample_item)
 
     checks_df = pd.DataFrame(checks_data)
     samples_df = pd.DataFrame(sample_rows) if sample_rows else pd.DataFrame([{"Notice": "No failing records"}])
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    dest: Any = output_file if output_file is not None else io.BytesIO()
+    with pd.ExcelWriter(dest, engine="openpyxl") as writer:
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
         checks_df.to_excel(writer, sheet_name="Validation Details", index=False)
         samples_df.to_excel(writer, sheet_name="Failing Samples", index=False)
 
-    return output.getvalue()
+    if output_file is not None:
+        return b""
+    return dest.getvalue()
 
 
-def generate_reconciliation_excel(result: ReconciliationResult) -> bytes:
-    """Generate a multi-tab Excel workbook for reconciliation outputs.
+def generate_reconciliation_excel(
+    result: ReconciliationResult,
+    max_rows_per_sheet: int = 10_000,
+    output_file: Optional[Union[str, Path]] = None,
+) -> bytes:
+    """Generate a multi-tab Excel workbook for reconciliation outputs with memory bounds.
 
     Sheets:
     1. Summary
-    2. Value Mismatches
-    3. Source Only
-    4. Target Only
-    5. Matched Sample
+    2. Value Mismatches (capped at max_rows_per_sheet)
+    3. Source Only (capped at max_rows_per_sheet)
+    4. Target Only (capped at max_rows_per_sheet)
+    5. Matched Sample (capped at max_rows_per_sheet)
 
     Args:
         result: ReconciliationResult instance.
+        max_rows_per_sheet: Maximum rows written per discrepancy sheet to bound memory.
+        output_file: Optional direct file path for disk streaming.
 
     Returns:
-        Excel workbook as bytes.
+        Excel workbook as bytes (or empty bytes if output_file was provided).
     """
     s = result.summary
     summary_rows = [
@@ -229,29 +242,33 @@ def generate_reconciliation_excel(result: ReconciliationResult) -> bytes:
         {"Metric": "Source Null Keys", "Value": s.source_null_keys},
         {"Metric": "Target Null Keys", "Value": s.target_null_keys},
         {"Metric": "Key Warnings", "Value": s.key_error_message or "None"},
+        {"Metric": "Excel Row Cap per Sheet", "Value": f"{max_rows_per_sheet:,} rows (Export to CSV for full dumps)"},
     ]
     summary_df = pd.DataFrame(summary_rows)
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    def _bound_df(df: pd.DataFrame, empty_msg: str) -> pd.DataFrame:
+        if df.empty:
+            return pd.DataFrame([{"Notice": empty_msg}])
+        if len(df) > max_rows_per_sheet:
+            return df.head(max_rows_per_sheet)
+        return df
+
+    dest: Any = output_file if output_file is not None else io.BytesIO()
+    with pd.ExcelWriter(dest, engine="openpyxl") as writer:
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
 
-        if not result.mismatched_df.empty:
-            result.mismatched_df.to_excel(writer, sheet_name="Value Mismatches", index=False)
-        else:
-            pd.DataFrame([{"Notice": "No value mismatches detected"}]).to_excel(writer, sheet_name="Value Mismatches", index=False)
+        mismatched_out = _bound_df(result.mismatched_df, "No value mismatches detected")
+        mismatched_out.to_excel(writer, sheet_name="Value Mismatches", index=False)
 
-        if not result.source_only_df.empty:
-            result.source_only_df.to_excel(writer, sheet_name="Source Only", index=False)
-        else:
-            pd.DataFrame([{"Notice": "No source-only records"}]).to_excel(writer, sheet_name="Source Only", index=False)
+        source_only_out = _bound_df(result.source_only_df, "No source-only records")
+        source_only_out.to_excel(writer, sheet_name="Source Only", index=False)
 
-        if not result.target_only_df.empty:
-            result.target_only_df.to_excel(writer, sheet_name="Target Only", index=False)
-        else:
-            pd.DataFrame([{"Notice": "No target-only records"}]).to_excel(writer, sheet_name="Target Only", index=False)
+        target_only_out = _bound_df(result.target_only_df, "No target-only records")
+        target_only_out.to_excel(writer, sheet_name="Target Only", index=False)
 
-        if not result.matched_df.empty:
-            result.matched_df.head(1000).to_excel(writer, sheet_name="Matched Records (Sample)", index=False)
+        matched_out = _bound_df(result.matched_df, "No matched records")
+        matched_out.to_excel(writer, sheet_name="Matched Records (Sample)", index=False)
 
-    return output.getvalue()
+    if output_file is not None:
+        return b""
+    return dest.getvalue()

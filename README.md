@@ -39,7 +39,7 @@ OpenDataGuard solves these challenges with a 100% local, safe engine featuring d
 
 ## 3. Key Features
 
-- **🛡️ 14 Configurable Data Quality Checks**:
+- **🛡️ 15 Configurable Data Quality Checks**:
   1. **Missing values** with threshold tolerance (`check_missing_values`).
   2. **Duplicate row detection** across full rows or key subsets (`check_duplicate_rows`).
   3. **Unique key integrity** and null key enforcement (`check_key_uniqueness`).
@@ -54,12 +54,14 @@ OpenDataGuard solves these challenges with a 100% local, safe engine featuring d
   12. **Schema and column mismatch detection** for missing/unexpected columns (`check_schema_mismatch`).
   13. **Outlier detection via Interquartile Range (IQR)** (`check_outliers_iqr`).
   14. **Row count boundary enforcement** (`check_row_count`).
+  15. **Cross-column relational comparisons** (`check_column_comparison`) with conditional `when` triggers.
 
 - **🔄 Two-Way Dataset Reconciliation**:
   - Key-based 1-to-1 diff between Source and Target datasets.
   - Cell-by-cell discrepancy tracking with configurable floating-point tolerances (`float_atol`, `float_rtol`).
   - Pre-flight duplicate key and null key guards to prevent accidental Cartesian explosion.
   - Clear isolation of *Source-Only*, *Target-Only*, *Value Mismatches*, and *Matched* records.
+  - Native support for CSV, TSV, Excel, and Parquet (`.parquet`) formats.
 
 - **📈 Continuous Data Quality Score (0.0% – 100.0%)**:
   - Deterministic composite scoring across all executed assertions:
@@ -68,12 +70,14 @@ OpenDataGuard solves these challenges with a 100% local, safe engine featuring d
   - Structural / schema checks: binary scoring ($1.0$ if passed, $0.0$ if failed).
   - Defaults safely to $100.0\%$ when no rules fail.
 
-- **📜 Declarative Rules-as-Code**:
+- **📜 Declarative Rules-as-Code & Table-Driven Dispatch**:
   - Author and version-control validation assertions in JSON or YAML.
   - Strict configuration schema validation rejecting malformed rules before execution.
+  - Conditional assertions (`when: {column: "status", equals: "ACTIVE"}`).
 
-- **🗄️ Secure SQL Database Auditing**:
+- **🗄️ Multi-Schema SQL Database Auditing**:
   - Read-only schema and table auditing via SQLAlchemy 2.0 (SQLite included, PostgreSQL optional).
+  - Schema-aware reflection (`schema="analytics"`) supporting enterprise multi-tenant databases.
   - Sensitive connection secrets and credentials are automatically masked in all logs and outputs.
   - Bounded queries prevent accidental memory exhaustion on large database tables.
 
@@ -82,11 +86,12 @@ OpenDataGuard solves these challenges with a 100% local, safe engine featuring d
   - Plotly-powered column error distributions and historical score trends.
   - Drill-down tables with failing row samples for immediate root-cause analysis.
 
-- **📥 Multi-Format Deterministic Reports**:
-  - One-click export to multi-sheet Excel workbooks (`.xlsx`), CSV, and deterministic JSON schemas with UTC ISO-8601 timestamps.
+- **📥 Memory-Bounded Multi-Format Reports**:
+  - One-click export to multi-sheet Excel workbooks (`.xlsx`), streaming CSV, and deterministic JSON schemas.
+  - Configurable row caps on discrepancy sheets to prevent out-of-memory errors on large datasets.
 
 - **🔒 Local Audit History**:
-  - Embedded SQLite audit ledger tracking execution metadata without persisting raw dataset rows.
+  - Embedded SQLite audit ledger tracking validation and reconciliation execution metadata without persisting raw dataset rows.
 
 ---
 

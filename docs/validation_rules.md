@@ -139,3 +139,42 @@ Asserts required column presence and flags unexpected columns if `strict: true`.
   "strict": false
 }
 ```
+
+### `column_comparison`
+Asserts relational comparisons between two columns across each record (e.g., `discount <= gross_sales`, `end_date >= start_date`).
+```json
+{
+  "rule": "column_comparison",
+  "column": "discount_amount",
+  "compare_to": "gross_sales",
+  "operator": "<=",
+  "allow_nulls": true
+}
+```
+- `operator` (optional, default `">="`): Comparison operator. Supported: `>=`, `>`, `<=`, `<`, `==`, `!=`.
+- `allow_nulls` (optional, default `true`): If `true`, rows where either column is null are not flagged as violations. If `false`, null values trigger validation failures.
+
+---
+
+## 3. Conditional Rules (`when` Clause)
+
+Any rule definition can optionally include a `when` clause to evaluate assertions only against records meeting a condition:
+
+```yaml
+rules:
+  - rule: required
+    column: cancel_reason
+    treat_empty_as_missing: true
+    when:
+      column: status
+      equals: "CANCELLED"
+
+  - rule: range
+    column: discount_percent
+    min: 0.0
+    max: 15.0
+    when:
+      column: customer_tier
+      in: ["STANDARD", "BASIC"]
+```
+Supported `when` operators: `equals`, `value`, `operator`, `in`.

@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 
 from opendataguard.logging_config import logger
+from opendataguard.reconciliation import ReconciliationResult, ReconciliationSummary
 from opendataguard.validators import ValidationResult, calculate_data_quality_score
 
 DEFAULT_DB_DIR = Path.home() / ".opendataguard"
@@ -90,10 +91,40 @@ class HistoryManager:
             FOREIGN KEY (run_id) REFERENCES validation_runs (run_id) ON DELETE CASCADE
         );
         """
+        create_recon_runs_table = """
+        CREATE TABLE IF NOT EXISTS reconciliation_runs (
+            run_id TEXT PRIMARY KEY,
+            timestamp_utc TEXT NOT NULL,
+            source_name TEXT NOT NULL,
+            target_name TEXT NOT NULL,
+            key_columns TEXT NOT NULL,
+            source_rows INTEGER NOT NULL,
+            target_rows INTEGER NOT NULL,
+            row_count_diff INTEGER NOT NULL,
+            matched_records INTEGER NOT NULL,
+            mismatched_records INTEGER NOT NULL,
+            source_only_records INTEGER NOT NULL,
+            target_only_records INTEGER NOT NULL,
+            match_rate REAL NOT NULL,
+            status TEXT NOT NULL,
+            summary_json TEXT
+        );
+        """
+        create_recon_mismatches_table = """
+        CREATE TABLE IF NOT EXISTS reconciliation_column_mismatches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            column_name TEXT NOT NULL,
+            mismatch_count INTEGER NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES reconciliation_runs (run_id) ON DELETE CASCADE
+        );
+        """
         with self._connection() as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute(create_runs_table)
             conn.execute(create_details_table)
+            conn.execute(create_recon_runs_table)
+            conn.execute(create_recon_mismatches_table)
             conn.commit()
 
     def record_run(
@@ -240,8 +271,182 @@ class HistoryManager:
             "checks": [dict(r) for r in details_rows],
         }
 
+    def record_reconciliation_run(
+        self,
+        result_or_summary: Union[ReconciliationResult, ReconciliationSummary],
+        custom_run_id: Optional[str] = None,
+    ) -> str:
+        """Record reconciliation run summary and column mismatch breakdown.
+
+        Args:
+            result_or_summary: ReconciliationResult or ReconciliationSummary instance.
+            custom_run_id: Optional custom identifier.
+
+        Returns:
+            The recorded run_id UUID string.
+        """
+        if hasattr(result_or_summary, "summary"):
+            s: ReconciliationSummary = result_or_summary.summary
+        else:
+            s = result_or_summary
+
+        run_id = custom_run_id or str(uuid.uuid4())
+        ts = datetime.now(timezone.utc).isoformat()
+
+        if s.has_key_errors:
+            status = "FAILED"
+        elif s.mismatched_records == 0 and s.source_only_records == 0 and s.target_only_records == 0:
+            status = "MATCHED"
+        else:
+            status = "DISCREPANCIES"
+
+        key_cols_str = json.dumps(s.key_columns)
+        summary_payload = s.to_dict()
+
+        with self._connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO reconciliation_runs
+                (run_id, timestamp_utc, source_name, target_name, key_columns,
+                 source_rows, target_rows, row_count_diff, matched_records,
+                 mismatched_records, source_only_records, target_only_records,
+                 match_rate, status, summary_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    ts,
+                    s.source_name,
+                    s.target_name,
+                    key_cols_str,
+                    s.source_rows,
+                    s.target_rows,
+                    s.row_count_diff,
+                    s.matched_records,
+                    s.mismatched_records,
+                    s.source_only_records,
+                    s.target_only_records,
+                    s.match_rate_percent,
+                    status,
+                    json.dumps(summary_payload),
+                ),
+            )
+
+            for col_name, mismatch_cnt in s.column_mismatch_counts.items():
+                conn.execute(
+                    """
+                    INSERT INTO reconciliation_column_mismatches
+                    (run_id, column_name, mismatch_count)
+                    VALUES (?, ?, ?)
+                    """,
+                    (run_id, str(col_name), int(mismatch_cnt)),
+                )
+            conn.commit()
+
+        logger.info(
+            "Recorded reconciliation run '%s' (%s vs %s) with match rate %.2f%%",
+            run_id,
+            s.source_name,
+            s.target_name,
+            s.match_rate_percent,
+        )
+        return run_id
+
+    def get_reconciliation_history(self, limit: int = 50) -> pd.DataFrame:
+        """Fetch recent reconciliation runs as a pandas DataFrame.
+
+        Args:
+            limit: Maximum number of recent runs to return.
+
+        Returns:
+            DataFrame of reconciliation history.
+        """
+        query = """
+        SELECT
+            run_id,
+            timestamp_utc,
+            source_name,
+            target_name,
+            key_columns,
+            source_rows,
+            target_rows,
+            row_count_diff,
+            matched_records,
+            mismatched_records,
+            source_only_records,
+            target_only_records,
+            match_rate,
+            status
+        FROM reconciliation_runs
+        ORDER BY timestamp_utc DESC
+        LIMIT ?
+        """
+        with self._connection() as conn:
+            df = pd.read_sql_query(query, conn, params=(limit,))
+        return df
+
+    def get_reconciliation_run_details(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch comprehensive details for a specific reconciliation run.
+
+        Args:
+            run_id: The UUID of the run.
+
+        Returns:
+            Dictionary with reconciliation metadata and column mismatches, or None if not found.
+        """
+        with self._connection() as conn:
+            run_cursor = conn.execute("SELECT * FROM reconciliation_runs WHERE run_id = ?", (run_id,))
+            run_row = run_cursor.fetchone()
+            if not run_row:
+                return None
+
+            mismatches_cursor = conn.execute(
+                "SELECT column_name, mismatch_count FROM reconciliation_column_mismatches WHERE run_id = ?",
+                (run_id,),
+            )
+            mismatch_rows = mismatches_cursor.fetchall()
+
+        summary_dict = {}
+        if run_row["summary_json"]:
+            try:
+                summary_dict = json.loads(run_row["summary_json"])
+            except Exception:
+                summary_dict = {}
+
+        return {
+            "run_id": run_row["run_id"],
+            "timestamp_utc": run_row["timestamp_utc"],
+            "source_name": run_row["source_name"],
+            "target_name": run_row["target_name"],
+            "key_columns": json.loads(run_row["key_columns"]) if run_row["key_columns"].startswith("[") else [run_row["key_columns"]],
+            "source_rows": run_row["source_rows"],
+            "target_rows": run_row["target_rows"],
+            "row_count_diff": run_row["row_count_diff"],
+            "matched_records": run_row["matched_records"],
+            "mismatched_records": run_row["mismatched_records"],
+            "source_only_records": run_row["source_only_records"],
+            "target_only_records": run_row["target_only_records"],
+            "match_rate": run_row["match_rate"],
+            "status": run_row["status"],
+            "summary": summary_dict,
+            "column_mismatches": {r["column_name"]: r["mismatch_count"] for r in mismatch_rows},
+        }
+
+    def clear_reconciliation_history(self) -> bool:
+        """Delete all recorded reconciliation history records safely.
+
+        Returns:
+            True if cleared successfully.
+        """
+        with self._connection() as conn:
+            conn.execute("DELETE FROM reconciliation_column_mismatches")
+            conn.execute("DELETE FROM reconciliation_runs")
+            conn.commit()
+        logger.info("Cleared all reconciliation history from %s", self.db_path)
+        return True
+
     def clear_history(self) -> bool:
-        """Delete all recorded history records safely.
+        """Delete all recorded history records (validation and reconciliation) safely.
 
         Returns:
             True if cleared successfully.
@@ -249,6 +454,8 @@ class HistoryManager:
         with self._connection() as conn:
             conn.execute("DELETE FROM validation_details")
             conn.execute("DELETE FROM validation_runs")
+            conn.execute("DELETE FROM reconciliation_column_mismatches")
+            conn.execute("DELETE FROM reconciliation_runs")
             conn.commit()
-        logger.info("Cleared all validation history from %s", self.db_path)
+        logger.info("Cleared all validation and reconciliation history from %s", self.db_path)
         return True

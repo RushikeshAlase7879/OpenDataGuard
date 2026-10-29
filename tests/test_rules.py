@@ -197,5 +197,112 @@ def test_rule_suite_outliers_and_row_count():
     assert results[1].failed_records == 1
 
 
+def test_check_column_comparison_numeric_operators():
+    from opendataguard.validators import check_column_comparison
+
+    df = pd.DataFrame({
+        "gross": [100.0, 200.0, 50.0],
+        "discount": [10.0, 20.0, 60.0],  # 60.0 > 50.0 fails <=
+    })
+    res = check_column_comparison(df, "discount", "gross", operator="<=")
+    assert not res.passed
+    assert res.failed_records == 1
+
+    res_gt = check_column_comparison(df, "gross", "discount", operator=">=")
+    assert not res_gt.passed
+    assert res_gt.failed_records == 1
+
+
+def test_check_column_comparison_datetime():
+    from opendataguard.validators import check_column_comparison
+
+    df = pd.DataFrame({
+        "start_date": ["2023-01-01", "2023-05-01"],
+        "end_date": ["2023-01-10", "2023-04-01"],  # April is before May -> fails
+    })
+    res = check_column_comparison(df, "start_date", "end_date", operator="<=")
+    assert not res.passed
+    assert res.failed_records == 1
+
+
+def test_check_column_comparison_null_handling():
+    from opendataguard.validators import check_column_comparison
+
+    df = pd.DataFrame({
+        "a": [10, None, 30],
+        "b": [5, 20, 15],
+    })
+    # With allow_nulls=True (default), row 1 (None) is not a failure
+    res_allowed = check_column_comparison(df, "a", "b", operator=">=", allow_nulls=True)
+    assert res_allowed.passed
+    assert res_allowed.failed_records == 0
+
+    # With allow_nulls=False, row 1 (None) is a failure
+    res_strict = check_column_comparison(df, "a", "b", operator=">=", allow_nulls=False)
+    assert not res_strict.passed
+    assert res_strict.failed_records == 1
+
+
+def test_check_column_comparison_missing_columns():
+    from opendataguard.validators import check_column_comparison
+
+    df = pd.DataFrame({"col_x": [1, 2]})
+    res = check_column_comparison(df, "col_x", "missing_y")
+    assert not res.passed
+    assert "missing_y" in res.message
+
+
+def test_check_column_comparison_invalid_operator():
+    from opendataguard.validators import check_column_comparison
+
+    df = pd.DataFrame({"a": [1], "b": [2]})
+    with pytest.raises(ValueError, match="Unsupported comparison operator"):
+        check_column_comparison(df, "a", "b", operator="~=")
+
+
+def test_rule_suite_column_comparison_declarative():
+    df = pd.DataFrame({
+        "price": [10.0, 20.0, 30.0],
+        "cost": [5.0, 15.0, 35.0],  # 35.0 > 30.0 fails price >= cost
+    })
+    config = {
+        "rules": [
+            {
+                "rule": "column_comparison",
+                "column": "price",
+                "compare_to": "cost",
+                "operator": ">=",
+            }
+        ]
+    }
+    results = execute_rule_suite(df, config)
+    assert len(results) == 1
+    assert not results[0].passed
+    assert results[0].failed_records == 1
+
+
+def test_rule_suite_conditional_when_filter():
+    df = pd.DataFrame({
+        "status": ["ACTIVE", "INACTIVE", "ACTIVE"],
+        "email": ["alice@corp.com", "", "charlie@corp.com"],
+    })
+    # If status is ACTIVE, email is required (treat_empty_as_missing=True)
+    # INACTIVE with empty email should be ignored due to when clause
+    config = {
+        "rules": [
+            {
+                "rule": "required",
+                "column": "email",
+                "treat_empty_as_missing": True,
+                "when": {"column": "status", "equals": "ACTIVE"},
+            }
+        ]
+    }
+    results = execute_rule_suite(df, config)
+    assert len(results) == 1
+    # Both ACTIVE rows have valid emails, so this passes!
+    assert results[0].passed
+    assert results[0].failed_records == 0
+
 
 

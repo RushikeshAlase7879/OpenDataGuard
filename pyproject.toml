@@ -49,8 +49,15 @@ dependencies = [
 opendataguard = "opendataguard.cli:main"
 
 [project.optional-dependencies]
+parquet = [
+    "pyarrow>=14.0.0",
+]
 postgres = [
     "psycopg2-binary>=2.9.9",
+]
+all = [
+    "psycopg2-binary>=2.9.9",
+    "pyarrow>=14.0.0",
 ]
 dev = [
     "pytest>=8.0.0",
