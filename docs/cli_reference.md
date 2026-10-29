@@ -17,7 +17,7 @@ opendataguard [-h] [-V] {validate,reconcile,ui,version} ...
 | Option | Description |
 | :--- | :--- |
 | `-h`, `--help` | Show top-level command usage and exit. |
-| `-V`, `--version` | Show program version (`OpenDataGuard 1.0.0`) and exit. |
+| `-V`, `--version` | Show program version (`OpenDataGuard 1.1.0`) and exit. |
 
 ---
 
@@ -149,7 +149,7 @@ opendataguard version
 
 #### Example Output
 ```text
-OpenDataGuard 1.0.0 (Python 3.12.4 on Windows)
+OpenDataGuard 1.1.0 (Python 3.12.4 on Windows)
 ```
 
 ---

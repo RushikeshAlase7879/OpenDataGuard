@@ -119,7 +119,7 @@ def test_cli_version_flag(capsys):
     exit_code = main(["--version"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "OpenDataGuard 1.0.0" in captured.out
+    assert "OpenDataGuard 1.1.0" in captured.out
 
 
 def test_cli_version_subcommand(capsys):
@@ -127,7 +127,7 @@ def test_cli_version_subcommand(capsys):
     exit_code = main(["version"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "OpenDataGuard 1.0.0" in captured.out
+    assert "OpenDataGuard 1.1.0" in captured.out
     assert "Python" in captured.out
 
 

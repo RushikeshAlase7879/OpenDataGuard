@@ -4,6 +4,31 @@ All notable changes to **OpenDataGuard** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-29
+
+### Added
+- **Native Command-Line Interface (`opendataguard`)**:
+  - `validate`: Headless dataset validation with exit codes for CI/CD pipelines (`--min-score`, `--strict`, `--output-json`, `--output-csv`, `--output-excel`).
+  - `reconcile`: Headless reconciliation with discrepancy reporting and tolerance bounds (`--keys`, `--tolerance`, `--output-json`, `--output-excel`).
+  - `ui`: Quick launcher for the interactive Streamlit dashboard.
+  - `version`: Detailed platform and environment diagnostics.
+- **Apache Parquet Ingestion**:
+  - Native loading of `.parquet` files via `load_dataset` with magic byte header validation (`PAR1`).
+  - Optional dependency group `opendataguard[parquet]` powered by PyArrow.
+- **Multi-Schema SQL Database Auditing**:
+  - Multi-schema table discovery via `list_database_schemas` and schema-qualified table inspection.
+- **Cross-Column Validation Rules**:
+  - Declarative cross-column relational checks (`check_column_comparison`) supporting numeric and datetime operators (`==`, `!=`, `<`, `<=`, `>`, `>=`).
+- **Reconciliation Audit History**:
+  - Persistent execution tracking for reconciliation jobs (`record_reconciliation_run`, `get_reconciliation_history`, `get_reconciliation_run_details`) in SQLite.
+- **File Ingestion Security Hardening**:
+  - Binary header validation (magic bytes) to reject executable headers disguised as data files.
+  - Environment variable support for maximum upload sizes (`OPENDATAGUARD_MAX_FILE_SIZE_MB`).
+  - Null-byte rejection in YAML/JSON rule configuration files.
+  - Deterministic CSV chunk reading with bounded chunk limits.
+- **Packaging Modernization**:
+  - Standardized SPDX license declaration (`license = "MIT"`).
+
 ## [1.0.0] - 2026-10-27
 
 ### Added

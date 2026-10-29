@@ -1,6 +1,6 @@
 """OpenDataGuard: Open-Source Data Quality, Validation, and Reconciliation Platform."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from opendataguard.cli import main
 from opendataguard.database import (

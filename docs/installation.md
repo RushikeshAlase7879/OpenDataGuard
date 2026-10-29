@@ -89,7 +89,7 @@ opendataguard --version
 opendataguard --help
 ```
 
-You should see `OpenDataGuard 1.0.0` and the list of available subcommands (`validate`, `reconcile`, `ui`, `version`).
+You should see `OpenDataGuard 1.1.0` and the list of available subcommands (`validate`, `reconcile`, `ui`, `version`).
 
 ### 2. Run the Automated Test Suite (Repository Checkouts)
 When working within a cloned repository checkout, execute the automated test runner:

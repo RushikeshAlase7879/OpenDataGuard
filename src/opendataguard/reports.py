@@ -90,10 +90,16 @@ def generate_validation_json(
     failed_count = sum(1 for r in results if not r.passed)
     score = calculate_data_quality_score(results)
 
+    try:
+        import opendataguard
+        current_version = opendataguard.__version__
+    except (ImportError, AttributeError):
+        current_version = "1.1.0"
+
     report = {
         "metadata": {
             "platform": "OpenDataGuard",
-            "version": "1.0.0",
+            "version": current_version,
             "timestamp_utc": ts,
             "dataset_name": str(resolved_name),
             "total_rows": row_count,

@@ -126,7 +126,7 @@ if "reconcile_result" not in st.session_state:
 # Sidebar Navigation
 st.sidebar.image("https://raw.githubusercontent.com/feathericons/feather/master/icons/shield.svg", width=48)
 st.sidebar.title("OpenDataGuard")
-st.sidebar.caption("v1.0.0 • Open-Source Data Quality Platform")
+st.sidebar.caption("v1.1.0 • Open-Source Data Quality Platform")
 
 PAGES = [
     "📊 Overview",
