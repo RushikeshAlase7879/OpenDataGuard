@@ -167,6 +167,12 @@ def test_validate_min_score_threshold_failure(failing_csv: Path, valid_rules_yam
     assert main(["validate", "-d", str(failing_csv), "-r", str(valid_rules_yaml), "--min-score", "99.9"]) == 1
 
 
+def test_validate_strict_mode(sample_csv: Path, failing_csv: Path, valid_rules_yaml: Path):
+    """Strict mode should succeed when all checks pass and fail when checks fail."""
+    assert main(["validate", "-d", str(sample_csv), "-r", str(valid_rules_yaml), "--strict"]) == 0
+    assert main(["validate", "-d", str(failing_csv), "-r", str(valid_rules_yaml), "--strict"]) == 1
+
+
 def test_validate_output_json(sample_csv: Path, valid_rules_yaml: Path, tmp_path: Path):
     """Output JSON report should be generated on disk."""
     out_file = tmp_path / "report.json"

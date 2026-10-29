@@ -1,5 +1,7 @@
 """OpenDataGuard: Open-Source Data Quality, Validation, and Reconciliation Platform."""
 
+__version__ = "1.0.0"
+
 from opendataguard.cli import main
 from opendataguard.database import (
     DatabaseConfig,
@@ -52,7 +54,6 @@ from opendataguard.validators import (
     validate_file_safety,
 )
 
-__version__ = "1.0.0"
 __all__ = [
     # Core types
     "ValidationResult",

@@ -173,10 +173,13 @@ def _handle_validate(args: argparse.Namespace) -> int:
 
     # Exit code determination:
     # 0 = All checks passed AND (min_score is None OR score >= min_score)
-    # 1 = One or more checks failed OR score < min_score
+    # 1 = One or more checks failed OR score < min_score OR (strict and score < 100.0)
     is_passing = (failed_checks == 0)
     if args.min_score is not None:
         if score < args.min_score:
+            is_passing = False
+    if getattr(args, "strict", False):
+        if failed_checks > 0 or score < 100.0:
             is_passing = False
 
     return 0 if is_passing else 1
