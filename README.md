@@ -16,10 +16,11 @@
 
 **OpenDataGuard** is a production-minded, open-source Python platform designed to help data analysts, analytics engineers, data engineers, and developers validate tabular datasets, assert data quality constraints, detect silent corruptions, perform rigorous dataset reconciliations, and inspect SQL database tables.
 
-It is 100% open-source, local-first, and operates without vendor lock-in, proprietary cloud dependencies, telemetry, or paid APIs. OpenDataGuard provides a dual interface:
+It is 100% open-source, local-first, and operates without vendor lock-in, proprietary cloud dependencies, telemetry, or paid APIs. OpenDataGuard provides three unified interfaces:
 
-- **Embeddable Python Library**: Directly integrate data quality checks, reconciliation routines, and scoring into your Python scripts, pandas workflows, and automated ETL/ELT pipelines via `pip install opendataguard`.
-- **Interactive Web Dashboard**: Explore dataset health visually, drill down into defect samples, perform side-by-side reconciliation, and export multi-sheet audit reports using the built-in Streamlit interface.
+- **Native Command-Line Interface (CLI)**: Automate dataset validation, reconciliation, and reporting directly in bash/PowerShell scripts, Makefile targets, and CI/CD pipelines via `opendataguard`.
+- **Embeddable Python Library**: Directly integrate modular data quality checks, reconciliation routines, and scoring into your Python scripts, pandas workflows, and automated ETL/ELT pipelines via `import opendataguard`.
+- **Interactive Web Dashboard**: Explore dataset health visually, drill down into defect samples, perform side-by-side reconciliation, and export multi-sheet audit reports using the built-in Streamlit interface (`opendataguard ui`).
 
 ---
 
@@ -107,8 +108,9 @@ OpenDataGuard solves these challenges with a 100% local, safe engine featuring d
 
 ```mermaid
 graph TD
-    API[Python Library: import opendataguard] --> Core[Core Engine]
-    UI[Streamlit Web App: app.py] --> Core
+    CLI[Native CLI: opendataguard] --> Core[Core Engine]
+    API[Python Library: import opendataguard] --> Core
+    UI[Streamlit Web App: opendataguard ui] --> Core
 
     subgraph "Core Engine (opendataguard)"
         Ingest[Safe File Ingestion & Chunking]
@@ -130,15 +132,17 @@ graph TD
 
 ## 6. Installation
 
-OpenDataGuard supports Python **3.9, 3.10, 3.11, and 3.12**.
+OpenDataGuard supports Python **3.9, 3.10, 3.11, and 3.12** (verified across Ubuntu and Windows in continuous integration).
 
-### Option A: Install from PyPI (Recommended for ETL & Pipelines)
+### Option A: Install from PyPI (Recommended for CLI & Pipelines)
 
 Install the core package directly from PyPI into your virtual environment:
 
 ```bash
 pip install opendataguard
 ```
+
+This installs the Python library and registers the native `opendataguard` CLI binary in your environment's PATH.
 
 If you plan to inspect PostgreSQL databases, install the optional PostgreSQL driver extra:
 
@@ -177,7 +181,65 @@ pip install -e ".[dev]"
 
 ## 7. Quickstart Guide
 
-### 1. In-Memory DataFrame Validation
+### 7.1 Native Command-Line Interface (CLI)
+
+The `opendataguard` CLI provides instant, zero-boilerplate validation and reconciliation for terminal scripts, Makefile workflows, and automated CI/CD pipelines.
+
+#### 1. Display Help & Version
+```bash
+opendataguard --help
+opendataguard --version
+opendataguard version
+```
+
+#### 2. Validate a Dataset against Rules
+Run automated data quality assertions against CSV or Excel datasets using declarative JSON or YAML rules:
+```bash
+# Basic validation with stdout quality scorecard
+opendataguard validate --data examples/sample_source.csv --rules config/sample_rules.yaml
+
+# Save a deterministic JSON audit report and enforce a minimum score threshold
+opendataguard validate --data examples/sample_source.csv --rules config/sample_rules.yaml --output report.json --min-score 90.0
+
+# Export multi-tab Excel workbook or CSV report
+opendataguard validate --data data.csv --rules rules.yaml --output validation_report.xlsx
+opendataguard validate --data data.csv --rules rules.yaml --output validation_report.csv
+```
+
+#### 3. Reconcile Two Datasets
+Compare source and target datasets row-by-row on key columns with automatic numeric tolerance:
+```bash
+# Single primary key reconciliation
+opendataguard reconcile --source examples/sample_source_deduped.csv --target examples/sample_target.csv --keys customer_id
+
+# Composite keys with multi-tab Excel mismatch export
+opendataguard reconcile --source source.csv --target target.csv --keys region store_id --output rec_report.xlsx
+
+# Comma-separated keys with JSON summary output
+opendataguard reconcile --source source.csv --target target.csv --keys "country,store_id" --output rec_summary.json
+```
+
+#### 4. Launch the Interactive Web Dashboard
+```bash
+# Launch Streamlit web UI (opens at http://localhost:8501)
+opendataguard ui
+
+# Run in headless mode on a custom port
+opendataguard ui --port 8501 --no-browser
+```
+
+#### 5. CLI Exit Codes & CI/CD Contracts
+OpenDataGuard uses standard POSIX exit codes designed for automated pipelines and error monitoring:
+
+| Exit Code | Meaning | Condition |
+| :---: | :--- | :--- |
+| **`0`** | **Success** | All validation rules passed and score $\ge$ `--min-score`, or datasets are 100% matched without discrepancies. |
+| **`1`** | **Quality Discrepancy** | One or more validation checks failed, quality score is below `--min-score`, or dataset reconciliation found mismatches / key warnings. |
+| **`2`** | **Runtime / System Error** | Invalid CLI arguments, missing input files, malformed JSON/YAML syntax, or unsupported configuration. |
+
+---
+
+### 7.2 In-Memory DataFrame Validation (Python API)
 
 ```python
 import pandas as pd
@@ -213,7 +275,7 @@ print(f"Data Quality Score: {score:.2f}%")
 print(f"Email check passed: {res_missing.passed} (Failed rows: {res_missing.failed_records})")
 ```
 
-### 2. Declarative Rule Suite Execution
+### 7.3 Declarative Rule Suite Execution (Python API)
 
 Execute validation suites defined in JSON or YAML:
 
@@ -231,7 +293,7 @@ passed_count = sum(1 for r in suite_results if r.passed)
 print(f"Executed {len(suite_results)} rules: {passed_count} passed.")
 ```
 
-### 3. Two-Way Dataset Reconciliation
+### 7.4 Two-Way Dataset Reconciliation (Python API)
 
 Compare two tabular datasets with key alignment, tolerance handling, and discrepancy categorization:
 
@@ -262,7 +324,7 @@ if not rec.mismatched_df.empty:
     print(rec.mismatched_df.head())
 ```
 
-### 4. Generating Audit Reports
+### 7.5 Generating Audit Reports (Python API)
 
 Export standardized reports in JSON, CSV, or multi-sheet Excel:
 
@@ -282,15 +344,19 @@ with open("validation_report.json", "w", encoding="utf-8") as f:
     f.write(json_report)
 ```
 
-### 5. Launching the Web Dashboard
+### 7.6 Launching the Web Dashboard
 
-If you cloned the repository or installed Streamlit:
+OpenDataGuard provides two straightforward ways to launch the interactive dashboard:
 
 ```bash
+# Recommended for all installations (PyPI package or development checkout):
+opendataguard ui
+
+# Alternatively, from a cloned repository root:
 streamlit run app.py
 ```
 
-Then open your browser at `http://localhost:8501`. For a guided UI walkthrough, consult [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md).
+Then open your browser at `http://localhost:8501`. For a guided UI walkthrough, consult [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md). For complete CLI syntax, see [docs/cli_reference.md](docs/cli_reference.md).
 
 ---
 
@@ -401,7 +467,7 @@ OpenDataGuard relies on the following verified core dependencies:
 
 | Component | Technology | Version Constraint |
 | :--- | :--- | :--- |
-| **Python** | Runtime | `>=3.9` (Tested on 3.10, 3.11, 3.12) |
+| **Python** | Runtime | `>=3.9` (Verified on 3.9, 3.10, 3.11, 3.12 across Ubuntu & Windows in CI) |
 | **Data Processing** | `pandas` | `>=2.2.0, <3.0.0` |
 | **Numeric Computations** | `numpy` | `>=1.26.0, <3.0.0` |
 | **Interactive Dashboard** | `streamlit` | `>=1.35.0, <2.0.0` |
@@ -469,11 +535,13 @@ OpenDataGuard/
 │   ├── installation.md         # Detailed setup instructions
 │   ├── validation_rules.md     # Declarative rule specification guide
 │   ├── troubleshooting.md      # FAQ and problem resolution
+│   ├── cli_reference.md        # Command-line interface reference manual
 │   ├── DEMO_GUIDE.md           # Step-by-step demonstration walkthrough
 │   └── screenshots/            # Showcase screenshots & capture guide
 ├── src/
 │   └── opendataguard/
 │       ├── __init__.py         # Public API exports
+│       ├── cli.py              # Native command-line interface entrypoint
 │       ├── validators.py       # 14 Core data quality checks & safe ingestion
 │       ├── reconciliation.py   # Two-way dataset diffing engine
 │       ├── database.py         # SQLAlchemy 2.0 read-only database auditor
@@ -483,6 +551,7 @@ OpenDataGuard/
 │       └── logging_config.py   # Secure credential-masking logger
 ├── tests/
 │   ├── __init__.py
+│   ├── test_cli.py             # CLI command & exit code tests
 │   ├── test_database.py        # Database inspection tests
 │   ├── test_e2e_features.py    # End-to-end integration tests
 │   ├── test_history.py         # History manager tests
@@ -504,7 +573,7 @@ OpenDataGuard/
 
 ## 15. Automated Testing
 
-OpenDataGuard features an automated test suite comprising 86 unit, integration, and UI tests:
+OpenDataGuard features an automated test suite comprising 115 unit, CLI, integration, and UI tests:
 
 ```bash
 # Run the test suite via the standalone test runner:

@@ -1,14 +1,63 @@
 # Troubleshooting & FAQ
 
-This guide addresses common questions, edge cases, and resolution steps when working with **OpenDataGuard**.
+This guide addresses common questions, edge cases, error resolutions, and operational troubleshooting when working with **OpenDataGuard**.
 
 ---
 
-## 1. File Upload Issues
+## 1. Command-Line Interface (CLI) Troubleshooting
+
+### Problem: `'opendataguard' is not recognized as an internal or external command` (or `opendataguard: command not found`)
+- **Cause**: The Python environment where OpenDataGuard is installed is not active, or the environment's `Scripts` (Windows) / `bin` (Unix) directory is not included in your system `PATH`.
+- **Resolution**:
+  1. Activate your virtual environment:
+     - **Windows (PowerShell)**: `.\venv\Scripts\Activate.ps1`
+     - **Linux / macOS**: `source venv/bin/activate`
+  2. Alternatively, invoke the CLI module directly through Python:
+     ```bash
+     python -m opendataguard.cli --help
+     ```
+
+### Problem: `Error: Data file not found at '<path>'` or `Error: Rules file not found at '<path>'`
+- **Cause**: The relative file path supplied to `--data`, `--rules`, `--source`, or `--target` does not match your active working directory, or contains unescaped special characters.
+- **Resolution**:
+  1. Verify the file's existence from your active terminal directory: `dir <path>` (Windows) or `ls <path>` (Unix).
+  2. Quote paths containing spaces: `--data "C:\My Data\customers.csv"`.
+  3. Supply absolute file paths when running scripts from different directories.
+
+### Problem: `Error loading rule suite: Unsupported rule type '<type>'`
+- **Cause**: A rule defined in your YAML or JSON file does not match one of OpenDataGuard's 14 supported rule types.
+- **Resolution**: Check your rule configuration against the supported rule catalog:
+  `required`, `unique`, `data_type`, `min_value`, `max_value`, `range`, `allowed_values`, `min_length`, `max_length`, `length_range`, `date_format`, `date_range`, `regex`, `email`, `schema`, `duplicate_rows`, `outliers`, `iqr`, `row_count`.
+
+### Problem: CLI returns exit code `1` in CI/CD pipeline
+- **Cause**: Exit code `1` indicates that OpenDataGuard executed successfully and detected data quality defects or reconciliation discrepancies according to your assertions.
+- **Resolution**:
+  - In `validate`: Inspect stdout to view failed checks. If minor defect rates are expected, adjust the minimum score threshold with `--min-score <float>` (e.g. `--min-score 95.0`).
+  - In `reconcile`: Inspect stdout to view mismatched columns and row count differences. If tiny numeric floating-point discrepancies are expected, configure `--atol 1e-4` or `--rtol 1e-4`.
+
+### Problem: Understanding CLI Exit Codes
+OpenDataGuard returns standardized POSIX exit codes to control automated pipelines:
+
+| Exit Code | Meaning | Actionable Remedy |
+| :---: | :--- | :--- |
+| **`0`** | **Clean Pass** | Validation passed and score $\ge$ `--min-score`; reconciliation 100% matched. |
+| **`1`** | **Quality Discrepancy** | Check failed or reconciliation mismatch. Fix data defects or tune tolerances. |
+| **`2`** | **Runtime / System Error** | Missing files, bad CLI arguments, or invalid JSON/YAML. Verify file paths and CLI syntax. |
+
+### Problem: `Error: OpenDataGuard Streamlit app.py could not be located`
+- **Cause**: `opendataguard ui` was run in an environment where the application entrypoint file could not be discovered automatically.
+- **Resolution**:
+  - If running from a repository checkout, ensure you run from the repository root.
+  - Specify the explicit path: `opendataguard ui --app-path /path/to/app.py`.
+  - Or export the environment variable: `export OPENDATAGUARD_APP_PATH=/path/to/app.py` (Linux/macOS) or `$env:OPENDATAGUARD_APP_PATH="C:\path\to\app.py"` (PowerShell).
+
+---
+
+## 2. File Upload & Ingestion Issues
 
 ### Problem: `ValueError: Uploaded file is completely empty (0 bytes)`
 - **Cause**: The selected file has a file size of 0 bytes or was an unwritten blank file.
-- **Resolution**: Verify that the file has content before uploading.
+- **Resolution**: Verify that the file has content before uploading or validating.
 
 ### Problem: `ValueError: File size exceeds maximum allowed limit`
 - **Cause**: The file exceeds the default 100 MB in-memory safety threshold.
@@ -20,24 +69,26 @@ This guide addresses common questions, edge cases, and resolution steps when wor
 
 ---
 
-## 2. Dataset Reconciliation
+## 3. Dataset Reconciliation Issues
 
 ### Problem: `Key Integrity Warning: Source/Target has duplicate key`
 - **Cause**: The key columns you selected contain duplicate entries in either the source or target dataset.
 - **Why OpenDataGuard halts**: If duplicate keys exist, a standard merge would cause an accidental many-to-many Cartesian explosion, producing inflated row counts and invalid mismatches.
-- **Resolution**: Use the **Data Quality Validation** tab to identify and resolve duplicates first, or select a composite set of key columns that uniquely identifies records.
+- **Resolution**: Use the **Data Quality Validation** tab or `opendataguard validate` to identify and resolve duplicate keys first, or supply composite key columns that uniquely identify records (e.g. `--keys region store_id`).
 
 ### Problem: Small floating-point values reported as mismatches
 - **Cause**: Python floating-point precision differences (e.g. `12.34000000001` vs `12.34`).
-- **Resolution**: Increase the `Numeric Tolerance (Absolute)` parameter in the reconciliation settings (e.g. from `1e-5` to `1e-4` or `1e-2`).
+- **Resolution**: Increase the absolute tolerance parameter:
+  - In CLI: `--atol 1e-4` or `--rtol 1e-4`.
+  - In Python: `reconcile_datasets(..., float_atol=1e-4, float_rtol=1e-4)`.
 
 ---
 
-## 3. SQL Database Auditing
+## 4. SQL Database Auditing
 
 ### Problem: `psycopg2` missing when attempting PostgreSQL connection
 - **Cause**: PostgreSQL driver is an optional dependency to keep base installation lightweight.
-- **Resolution**: Run `pip install psycopg2-binary`.
+- **Resolution**: Run `pip install "psycopg2-binary>=2.9.9"` or install the package extra `pip install "opendataguard[postgres]"`.
 
 ### Problem: SQLite database locked
 - **Cause**: Multiple write operations attempting concurrent lock on an external SQLite file.
@@ -45,7 +96,7 @@ This guide addresses common questions, edge cases, and resolution steps when wor
 
 ---
 
-## 4. History Storage
+## 5. History Storage
 
 ### Problem: How do I clear or reset the local validation history?
 - **Resolution**: Navigate to **📜 Validation History** in the web app and expand the *Clear History Audit Database* section, or delete the SQLite file directly from `~/.opendataguard/history.db`.

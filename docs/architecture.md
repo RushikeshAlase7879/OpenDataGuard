@@ -8,8 +8,8 @@ OpenDataGuard is structured with a decoupled layered architecture that cleanly s
 
 ```mermaid
 graph TD
-    UI[Streamlit Web App: app.py] --> Engine[Core Platform Engines]
-    CLI[Automation & Python API] --> Engine
+    UI[Streamlit Web App: opendataguard ui] --> Engine[Core Platform Engines]
+    CLI[Native CLI: opendataguard & Python API] --> Engine
 
     subgraph "Core Platform Engines (src/opendataguard)"
         Ingest[Ingestion & Profiling: validators.py]
@@ -61,6 +61,11 @@ graph TD
 
 ### Reports Engine (`reports.py`)
 - Serializes validation and reconciliation results into multi-tab Excel workbooks (using `openpyxl`), CSV streams, and deterministic JSON schemas with UTC ISO-8601 timestamps.
+
+### Command-Line Interface (`cli.py`)
+- Provides native console script entry point `opendataguard` registered in `pyproject.toml`.
+- Implements four production-grade subcommands (`validate`, `reconcile`, `ui`, `version`) built strictly on Python's standard library `argparse` without external dependencies.
+- Enforces strict POSIX exit codes (`0`: clean pass, `1`: quality defect or reconciliation discrepancy, `2`: runtime/syntax error) for CI/CD automation.
 
 ### Audit History Manager (`history.py`)
 - Manages an embedded SQLite database (`history.db`) storing execution metadata, scores, and check statuses.
