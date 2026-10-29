@@ -12,12 +12,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 from sqlalchemy import MetaData, Table, create_engine, func, inspect, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import NoSuchTableError, SQLAlchemyError
 
 from opendataguard.logging_config import logger
 
@@ -139,19 +139,31 @@ def list_database_tables(engine: Engine) -> List[str]:
         raise RuntimeError(f"Could not retrieve database tables: {err}") from err
 
 
-def inspect_table_schema(engine: Engine, table_name: str) -> List[Dict[str, Any]]:
+def inspect_table_schema(
+    engine: Engine,
+    table_name: str,
+    valid_tables: Optional[Iterable[str]] = None,
+) -> List[Dict[str, Any]]:
     """Return column definitions and primary keys for a selected table.
 
     Args:
         engine: Connected SQLAlchemy engine.
         table_name: Table name to inspect.
+        valid_tables: Optional pre-validated collection of table names.
 
     Returns:
         List of column metadata dictionaries.
+
+    Raises:
+        ValueError: If table does not exist or is invalid.
     """
-    tables = list_database_tables(engine)
-    if table_name not in tables:
-        raise ValueError(f"Table '{table_name}' does not exist in database catalog.")
+    if valid_tables is not None:
+        if table_name not in valid_tables:
+            raise ValueError(f"Table '{table_name}' does not exist in database catalog.")
+    else:
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            raise ValueError(f"Table '{table_name}' does not exist in database catalog.")
 
     inspector = inspect(engine)
     columns = inspector.get_columns(table_name)
@@ -171,22 +183,38 @@ def inspect_table_schema(engine: Engine, table_name: str) -> List[Dict[str, Any]
     return schema_info
 
 
-def get_table_row_count(engine: Engine, table_name: str) -> int:
+def get_table_row_count(
+    engine: Engine,
+    table_name: str,
+    valid_tables: Optional[Iterable[str]] = None,
+) -> int:
     """Safely count rows in a database table without string interpolation.
 
     Args:
         engine: Connected SQLAlchemy engine.
         table_name: Validated table name.
+        valid_tables: Optional pre-validated collection of table names.
 
     Returns:
         Total row count.
+
+    Raises:
+        ValueError: If table is not found in database catalog.
     """
-    tables = list_database_tables(engine)
-    if table_name not in tables:
-        raise ValueError(f"Table '{table_name}' not found in database catalog.")
+    if valid_tables is not None:
+        if table_name not in valid_tables:
+            raise ValueError(f"Table '{table_name}' not found in database catalog.")
+    else:
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            raise ValueError(f"Table '{table_name}' not found in database catalog.")
 
     metadata = MetaData()
-    tbl = Table(table_name, metadata, autoload_with=engine)
+    try:
+        tbl = Table(table_name, metadata, autoload_with=engine)
+    except NoSuchTableError:
+        raise ValueError(f"Table '{table_name}' not found in database catalog.")
+
     stmt = select(func.count()).select_from(tbl)
 
     with engine.connect() as conn:
@@ -198,6 +226,7 @@ def fetch_table_sample(
     engine: Engine,
     table_name: str,
     limit: int = 10_000,
+    valid_tables: Optional[Iterable[str]] = None,
 ) -> pd.DataFrame:
     """Safely fetch sample or full data from a table into a pandas DataFrame.
 
@@ -207,16 +236,28 @@ def fetch_table_sample(
         engine: Connected SQLAlchemy engine.
         table_name: Target table name.
         limit: Maximum number of rows to retrieve.
+        valid_tables: Optional pre-validated collection of table names.
 
     Returns:
         pd.DataFrame containing table rows.
+
+    Raises:
+        ValueError: If table is not found in database catalog.
     """
-    tables = list_database_tables(engine)
-    if table_name not in tables:
-        raise ValueError(f"Table '{table_name}' not found in database catalog.")
+    if valid_tables is not None:
+        if table_name not in valid_tables:
+            raise ValueError(f"Table '{table_name}' not found in database catalog.")
+    else:
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            raise ValueError(f"Table '{table_name}' not found in database catalog.")
 
     metadata = MetaData()
-    tbl = Table(table_name, metadata, autoload_with=engine)
+    try:
+        tbl = Table(table_name, metadata, autoload_with=engine)
+    except NoSuchTableError:
+        raise ValueError(f"Table '{table_name}' not found in database catalog.")
+
     stmt = select(tbl).limit(limit)
 
     with engine.connect() as conn:

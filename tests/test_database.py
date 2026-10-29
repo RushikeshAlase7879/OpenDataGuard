@@ -157,3 +157,36 @@ def test_sqlite_file_database_roundtrip(tmp_path):
     assert list(fetched["product"]) == ["Widget", "Gadget"]
 
 
+def test_database_valid_tables_optimization(sqlite_engine):
+    """Verify that passing pre-validated table collections works across schema, count, and sample."""
+    valid_list = ["test_users"]
+    schema = inspect_table_schema(sqlite_engine, "test_users", valid_tables=valid_list)
+    assert len(schema) == 3
+
+    cnt = get_table_row_count(sqlite_engine, "test_users", valid_tables=valid_list)
+    assert cnt == 2
+
+    df = fetch_table_sample(sqlite_engine, "test_users", limit=10, valid_tables=valid_list)
+    assert len(df) == 2
+
+
+def test_database_valid_tables_rejection(sqlite_engine):
+    """Verify that passing a pre-validated collection rejects unlisted tables before querying."""
+    valid_list = ["other_table"]
+    with pytest.raises(ValueError, match="not found in database catalog"):
+        get_table_row_count(sqlite_engine, "test_users", valid_tables=valid_list)
+
+    with pytest.raises(ValueError, match="not found in database catalog"):
+        fetch_table_sample(sqlite_engine, "test_users", valid_tables=valid_list)
+
+    with pytest.raises(ValueError, match="does not exist in database catalog"):
+        inspect_table_schema(sqlite_engine, "test_users", valid_tables=valid_list)
+
+
+def test_database_fast_has_table_reflection(sqlite_engine):
+    """Verify fast has_table inspection rejects invalid tables with proper ValueError."""
+    with pytest.raises(ValueError, match="not found in database catalog"):
+        get_table_row_count(sqlite_engine, "non_existent_quick_check")
+
+    with pytest.raises(ValueError, match="not found in database catalog"):
+        fetch_table_sample(sqlite_engine, "non_existent_quick_check")

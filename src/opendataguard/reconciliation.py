@@ -97,6 +97,61 @@ def _values_are_equal(
     return str_s == str_t
 
 
+def _compare_series_vectorized(
+    s_col: pd.Series,
+    t_col: pd.Series,
+    float_atol: float = 1e-5,
+    float_rtol: float = 1e-5,
+    ignore_whitespace: bool = True,
+    case_sensitive: bool = True,
+) -> np.ndarray:
+    """Compare two pandas Series aligned by index and return a boolean numpy array of matches."""
+    n = len(s_col)
+    if n == 0:
+        return np.array([], dtype=bool)
+
+    s_null = s_col.isna().to_numpy()
+    t_null = t_col.isna().to_numpy()
+    matches = np.zeros(n, dtype=bool)
+    matches[s_null & t_null] = True
+
+    valid_mask = ~(s_null | t_null)
+    if not np.any(valid_mask):
+        return matches
+
+    is_s_num = pd.api.types.is_numeric_dtype(s_col) and not pd.api.types.is_bool_dtype(s_col)
+    is_t_num = pd.api.types.is_numeric_dtype(t_col) and not pd.api.types.is_bool_dtype(t_col)
+    if is_s_num and is_t_num:
+        s_vals = s_col.to_numpy(dtype=float, na_value=np.nan)
+        t_vals = t_col.to_numpy(dtype=float, na_value=np.nan)
+        close = np.isclose(s_vals, t_vals, rtol=float_rtol, atol=float_atol, equal_nan=True)
+        matches[valid_mask] = close[valid_mask]
+        return matches
+
+    try:
+        s_num = pd.to_numeric(s_col[valid_mask], errors="raise").to_numpy(dtype=float)
+        t_num = pd.to_numeric(t_col[valid_mask], errors="raise").to_numpy(dtype=float)
+        close = np.isclose(s_num, t_num, rtol=float_rtol, atol=float_atol, equal_nan=True)
+        matches[valid_mask] = close
+        return matches
+    except (ValueError, TypeError, OverflowError):
+        # Fallback element-wise comparison for mixed object columns
+        s_vals = s_col[valid_mask].to_numpy()
+        t_vals = t_col[valid_mask].to_numpy()
+        matches[valid_mask] = [
+            _values_are_equal(
+                s,
+                t,
+                float_atol=float_atol,
+                float_rtol=float_rtol,
+                ignore_whitespace=ignore_whitespace,
+                case_sensitive=case_sensitive,
+            )
+            for s, t in zip(s_vals, t_vals)
+        ]
+        return matches
+
+
 def reconcile_datasets(
     source_df: pd.DataFrame,
     target_df: pd.DataFrame,
@@ -229,53 +284,69 @@ def reconcile_datasets(
     src_idx_set = set(src_indexed.index)
     tgt_idx_set = set(tgt_indexed.index)
 
-    common_keys = src_idx_set.intersection(tgt_idx_set)
-    src_only_keys = src_idx_set.difference(tgt_idx_set)
-    tgt_only_keys = tgt_idx_set.difference(src_idx_set)
+    # Deterministic key ordering: preserves source row order for common & source-only, target order for target-only
+    common_keys_list = [k for k in src_indexed.index if k in tgt_idx_set]
+    src_only_keys_list = [k for k in src_indexed.index if k not in tgt_idx_set]
+    tgt_only_keys_list = [k for k in tgt_indexed.index if k not in src_idx_set]
 
     # Reconstruct Source Only (including null key rows)
     src_only_df = pd.concat([
-        src_indexed.loc[list(src_only_keys)].reset_index() if src_only_keys else pd.DataFrame(columns=source_df.columns),
+        src_indexed.loc[src_only_keys_list].reset_index() if src_only_keys_list else pd.DataFrame(columns=source_df.columns),
         source_df[src_null_mask],
     ], ignore_index=True)
 
     # Reconstruct Target Only (including null key rows)
     tgt_only_df = pd.concat([
-        tgt_indexed.loc[list(tgt_only_keys)].reset_index() if tgt_only_keys else pd.DataFrame(columns=target_df.columns),
+        tgt_indexed.loc[tgt_only_keys_list].reset_index() if tgt_only_keys_list else pd.DataFrame(columns=target_df.columns),
         target_df[tgt_null_mask],
     ], ignore_index=True)
 
-    # 4. Compare common records
+    # 4. Compare common records using vectorized column comparisons
+    col_mismatch_counts = {}
     mismatched_rows = []
     matched_keys_list = []
-    col_mismatch_counts = {c: 0 for c in compare_cols}
 
-    for key_val in common_keys:
-        row_s = src_indexed.loc[key_val]
-        row_t = tgt_indexed.loc[key_val]
+    if common_keys_list:
+        src_common = src_indexed.loc[common_keys_list]
+        tgt_common = tgt_indexed.loc[common_keys_list]
 
-        has_row_mismatch = False
-        row_key_dict = {keys[0]: key_val} if len(keys) == 1 else dict(zip(keys, key_val))
-
+        col_equality = {}
         for col in compare_cols:
-            val_s = row_s[col]
-            val_t = row_t[col]
-
-            if not _values_are_equal(
-                val_s,
-                val_t,
+            eq_mask = _compare_series_vectorized(
+                src_common[col],
+                tgt_common[col],
                 float_atol=float_atol,
                 float_rtol=float_rtol,
                 ignore_whitespace=ignore_whitespace,
                 case_sensitive=case_sensitive,
-            ):
-                has_row_mismatch = True
-                col_mismatch_counts[col] += 1
-                mismatch_record = {**row_key_dict, "mismatched_column": col, "source_value": val_s, "target_value": val_t}
-                mismatched_rows.append(mismatch_record)
+            )
+            col_equality[col] = eq_mask
+            mismatches = int(np.sum(~eq_mask))
+            if mismatches > 0:
+                col_mismatch_counts[col] = mismatches
 
-        if not has_row_mismatch:
-            matched_keys_list.append(key_val)
+        if compare_cols:
+            all_equal_mask = np.logical_and.reduce(list(col_equality.values()))
+        else:
+            all_equal_mask = np.ones(len(common_keys_list), dtype=bool)
+
+        matched_keys_list = [k for k, is_eq in zip(common_keys_list, all_equal_mask) if is_eq]
+
+        # Extract mismatch rows in deterministic source row order, then col order
+        mismatched_indices = np.where(~all_equal_mask)[0]
+        for idx in mismatched_indices:
+            key_val = common_keys_list[idx]
+            row_key_dict = {keys[0]: key_val} if len(keys) == 1 else dict(zip(keys, key_val))
+            for col in compare_cols:
+                if not col_equality[col][idx]:
+                    val_s = src_common[col].iloc[idx]
+                    val_t = tgt_common[col].iloc[idx]
+                    mismatched_rows.append({
+                        **row_key_dict,
+                        "mismatched_column": col,
+                        "source_value": val_s,
+                        "target_value": val_t,
+                    })
 
     # Matched DataFrame
     if matched_keys_list:
@@ -289,7 +360,7 @@ def reconcile_datasets(
     else:
         mismatched_df = pd.DataFrame(columns=[*keys, "mismatched_column", "source_value", "target_value"])
 
-    total_common_records = len(common_keys)
+    total_common_records = len(common_keys_list)
     matched_count = len(matched_keys_list)
     mismatched_record_count = total_common_records - matched_count
 
@@ -315,7 +386,7 @@ def reconcile_datasets(
         matched_records=matched_count,
         mismatched_records=mismatched_record_count,
         match_rate_percent=match_rate,
-        column_mismatch_counts={k: v for k, v in col_mismatch_counts.items() if v > 0},
+        column_mismatch_counts=col_mismatch_counts,
         has_key_errors=has_key_errors,
         key_error_message=key_error_msg,
     )

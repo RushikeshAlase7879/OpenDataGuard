@@ -162,4 +162,91 @@ def test_reconciliation_disparate_columns_and_nan_values():
     assert "val" in res.summary.common_columns
 
 
+def test_reconciliation_output_determinism():
+    """Verify that reconciliation output ordering is 100% deterministic across multiple runs."""
+    df_s = pd.DataFrame({
+        "id": [10, 20, 30, 40, 50, 60],
+        "val": [100.0, 200.0, 300.0, 400.0, 500.0, 600.0],
+    })
+    df_t = pd.DataFrame({
+        "id": [30, 10, 50, 40, 20, 70],
+        "val": [300.0, 100.0, 505.0, 400.0, 200.0, 700.0],
+    })
 
+    # Run multiple times and assert identical ordered output
+    results = [reconcile_datasets(df_s, df_t, key_columns="id") for _ in range(5)]
+
+    first_matched = results[0].matched_df["id"].tolist()
+    first_mismatched = results[0].mismatched_df["id"].tolist()
+    first_src_only = results[0].source_only_df["id"].tolist()
+    first_tgt_only = results[0].target_only_df["id"].tolist()
+
+    # Matched rows should preserve Source row ordering (id 10, then 20, then 30, then 40)
+    assert first_matched == [10, 20, 30, 40]
+    # Mismatched row: id 50 (500.0 vs 505.0)
+    assert first_mismatched == [50]
+    # Source only: id 60
+    assert first_src_only == [60]
+    # Target only: id 70
+    assert first_tgt_only == [70]
+
+    for res in results[1:]:
+        assert res.matched_df["id"].tolist() == first_matched
+        assert res.mismatched_df["id"].tolist() == first_mismatched
+        assert res.source_only_df["id"].tolist() == first_src_only
+        assert res.target_only_df["id"].tolist() == first_tgt_only
+
+
+def test_reconciliation_vectorized_numeric_and_string_equivalence():
+    """Verify vectorized comparison matches exact precision tolerance and string rules."""
+    df_s = pd.DataFrame({
+        "id": [1, 2, 3, 4, 5],
+        "float_col": [1.00001, 2.0, 3.0, np.nan, 5.0],
+        "str_col": [" ABC ", "xyz", "Mixed100", "test", np.nan],
+    })
+    df_t = pd.DataFrame({
+        "id": [1, 2, 3, 4, 5],
+        "float_col": [1.00002, 2.0000001, 3.5, np.nan, np.nan],
+        "str_col": ["abc", "XYZ", "Mixed100", "mismatch", np.nan],
+    })
+
+    res = reconcile_datasets(
+        df_s,
+        df_t,
+        key_columns="id",
+        float_atol=1e-4,
+        ignore_whitespace=True,
+        case_sensitive=False,
+    )
+
+    # id 1: float diff 0.00001 < 1e-4 (match), str " ABC " vs "abc" with case_sensitive=False (match) -> MATCH
+    # id 2: float diff < 1e-4 (match), str "xyz" vs "XYZ" (match) -> MATCH
+    # id 3: float diff 0.5 > 1e-4 (mismatch) -> MISMATCH
+    # id 4: float nan vs nan (match), str "test" vs "mismatch" (mismatch) -> MISMATCH
+    # id 5: float 5.0 vs nan (mismatch), str nan vs nan (match) -> MISMATCH
+
+    assert res.summary.matched_records == 2
+    assert res.summary.mismatched_records == 3
+    assert res.matched_df["id"].tolist() == [1, 2]
+    assert res.mismatched_df["id"].unique().tolist() == [3, 4, 5]
+
+
+def test_reconciliation_composite_keys_order_and_determinism():
+    """Verify composite keys preservation and deterministic ordering."""
+    df_s = pd.DataFrame({
+        "country": ["US", "US", "UK", "UK"],
+        "account": [101, 102, 201, 202],
+        "balance": [100.0, 200.0, 300.0, 400.0],
+    })
+    df_t = pd.DataFrame({
+        "country": ["UK", "US", "UK", "US"],
+        "account": [201, 102, 202, 101],
+        "balance": [300.0, 200.0, 405.0, 100.0],
+    })
+
+    res = reconcile_datasets(df_s, df_t, key_columns=["country", "account"])
+    assert res.summary.matched_records == 3
+    assert res.summary.mismatched_records == 1
+    # Mismatch should be ('UK', 202)
+    assert res.mismatched_df["country"].iloc[0] == "UK"
+    assert res.mismatched_df["account"].iloc[0] == 202
