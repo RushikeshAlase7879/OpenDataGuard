@@ -53,3 +53,59 @@ def test_overview_metrics_empty_history(monkeypatch, tmp_path):
     assert "N/A" in metric_values
 
 
+def test_history_page_with_reconciliation_runs(tmp_path: Path, monkeypatch):
+    from opendataguard.history import HistoryManager
+    from opendataguard.reconciliation import reconcile_datasets
+    import pandas as pd
+
+    test_db = tmp_path / "test_hist.db"
+    mgr = HistoryManager(db_path=str(test_db))
+    monkeypatch.setattr("app.history_mgr", mgr)
+
+    # Perform a reconciliation and record run
+    df_src = pd.DataFrame({"id": [1, 2], "val": [10, 20]})
+    df_tgt = pd.DataFrame({"id": [1, 2], "val": [10, 20]})
+    rec_res = reconcile_datasets(
+        source_df=df_src,
+        target_df=df_tgt,
+        key_columns=["id"],
+        source_name="src.csv",
+        target_name="tgt.csv",
+    )
+    mgr.record_reconciliation_run(rec_res)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("📜 Validation History").run()
+    assert len(at.exception) == 0
+    assert len(at.error) == 0
+
+
+def test_ui_reconciliation_details_with_key_errors(tmp_path: Path, monkeypatch):
+    from opendataguard.history import HistoryManager
+    from opendataguard.reconciliation import reconcile_datasets
+    import pandas as pd
+
+    test_db = tmp_path / "test_hist_err.db"
+    mgr = HistoryManager(db_path=str(test_db))
+    monkeypatch.setattr("app.history_mgr", mgr)
+
+    # Reconciliation with duplicate keys triggers key error
+    df_src = pd.DataFrame({"id": [1, 1], "val": [10, 20]})
+    df_tgt = pd.DataFrame({"id": [1, 2], "val": [10, 20]})
+    rec_res = reconcile_datasets(
+        source_df=df_src,
+        target_df=df_tgt,
+        key_columns=["id"],
+        source_name="src_dup.csv",
+        target_name="tgt.csv",
+    )
+    mgr.record_reconciliation_run(rec_res)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    at.sidebar.radio[0].set_value("📜 Validation History").run()
+    assert len(at.exception) == 0
+    assert len(at.error) == 0
+
+

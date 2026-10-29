@@ -305,4 +305,9 @@ def test_rule_suite_conditional_when_filter():
     assert results[0].failed_records == 0
 
 
+def test_load_rules_null_byte_rejected():
+    with pytest.raises(ValueError, match="input contains null byte"):
+        load_rules("rules\x00.yaml")
+
+
 

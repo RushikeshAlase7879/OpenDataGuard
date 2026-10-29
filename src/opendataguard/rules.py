@@ -177,6 +177,8 @@ def load_rules(file_or_string: Union[str, Path, Dict[str, Any]]) -> Dict[str, An
         except Exception as err:
             raise ValueError(f"Failed to read rule file at '{file_or_string}': {err}") from err
     elif isinstance(file_or_string, str):
+        if "\x00" in file_or_string:
+            raise ValueError("Invalid rule specification: input contains null byte.")
         is_file_on_disk = False
         try:
             potential_p = Path(file_or_string)

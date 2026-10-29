@@ -467,5 +467,79 @@ def test_check_row_count_validation():
     assert not res_too_many.passed
 
 
+def test_magic_header_validation_parquet_and_excel(tmp_path: Path):
+    from opendataguard.validators import validate_file_safety
+
+    # Fake parquet file without PAR1 header
+    fake_parquet = tmp_path / "fake.parquet"
+    fake_parquet.write_bytes(b"NOT_PARQUET_MAGIC_BYTES_1234")
+    with pytest.raises(ValueError, match="missing standard 'PAR1' magic header bytes"):
+        validate_file_safety(fake_parquet)
+
+    # Fake xlsx file without PK header
+    fake_xlsx = tmp_path / "fake.xlsx"
+    fake_xlsx.write_bytes(b"NOT_A_ZIP_OR_EXCEL_ARCHIVE_FILE")
+    with pytest.raises(ValueError, match="missing standard ZIP archive header"):
+        validate_file_safety(fake_xlsx)
+
+
+def test_executable_headers_rejected_in_text_files(tmp_path: Path):
+    from opendataguard.validators import validate_file_safety
+
+    # Fake CSV with Windows MZ executable header
+    fake_mz_csv = tmp_path / "malicious.csv"
+    fake_mz_csv.write_bytes(b"MZ\x90\x00\x03\x00\x00\x00")
+    with pytest.raises(ValueError, match="binary executable header"):
+        validate_file_safety(fake_mz_csv)
+
+    # Fake TSV with Linux ELF executable header
+    fake_elf_tsv = tmp_path / "malicious.tsv"
+    fake_elf_tsv.write_bytes(b"\x7fELF\x02\x01\x01\x00")
+    with pytest.raises(ValueError, match="binary executable header"):
+        validate_file_safety(fake_elf_tsv)
+
+    # Fake CSV with Mach-O binary header
+    fake_macho_csv = tmp_path / "malicious_macho.csv"
+    fake_macho_csv.write_bytes(b"\xca\xfe\xba\xbe\x00\x00")
+    with pytest.raises(ValueError, match="binary executable header"):
+        validate_file_safety(fake_macho_csv)
+
+
+def test_magic_header_truncated_files_rejected(tmp_path: Path):
+    from opendataguard.validators import validate_file_safety
+
+    # Truncated 2-byte parquet file
+    trunc_parquet = tmp_path / "trunc.parquet"
+    trunc_parquet.write_bytes(b"PA")
+    with pytest.raises(ValueError, match="missing standard 'PAR1' magic header bytes"):
+        validate_file_safety(trunc_parquet)
+
+    # Truncated 2-byte xlsx file
+    trunc_xlsx = tmp_path / "trunc.xlsx"
+    trunc_xlsx.write_bytes(b"PK")
+    with pytest.raises(ValueError, match="missing standard ZIP archive header"):
+        validate_file_safety(trunc_xlsx)
+
+
+def test_validate_file_safety_supported_encodings_and_bom(tmp_path: Path):
+    from opendataguard.validators import load_dataset, validate_file_safety
+
+    # Valid CSV with UTF-8 BOM
+    bom_csv = tmp_path / "bom.csv"
+    bom_csv.write_bytes(b"\xef\xbb\xbfid,name\n1,Alice\n2,Bob\n")
+    ext, sz = validate_file_safety(bom_csv)
+    assert ext == ".csv"
+    assert sz > 0
+    df, meta = load_dataset(bom_csv)
+    assert len(df) == 2
+    assert "id" in df.columns
+
+    # Valid CSV with BytesIO input
+    bio = io.BytesIO(b"id,name\n10,Test\n")
+    ext_b, sz_b = validate_file_safety(bio, filename="sample.csv")
+    assert ext_b == ".csv"
+    assert sz_b > 0
+
+
 
 

@@ -30,6 +30,7 @@ from opendataguard.database import (
     fetch_table_sample,
     get_table_row_count,
     inspect_table_schema,
+    list_database_schemas,
     list_database_tables,
 )
 from opendataguard.history import HistoryManager
@@ -191,8 +192,8 @@ if navigation == "📊 Overview":
         st.subheader("Platform Capabilities")
         st.markdown(
             """
-            - **Dataset Profiling**: Instantly load and inspect CSV, TSV, and Excel files with automated encoding detection and null profiling.
-            - **12 Core Quality Checks**: Validate missingness, unique keys, regex, email syntax, data types, date formats/ordering, value ranges, string lengths, and categorical domains.
+            - **Dataset Profiling**: Instantly load and inspect CSV, TSV, Parquet, and Excel files with automated encoding detection and null profiling.
+            - **13 Core Quality Checks**: Validate missingness, unique keys, cross-column comparisons, regex, email syntax, data types, date formats/ordering, value ranges, string lengths, and categorical domains.
             - **Rule-as-Code Engine**: Version-control data quality assertions via declarative JSON or YAML specifications.
             - **Two-Way Reconciliation**: Perform key-based diffs between source & target tables with floating-point tolerance and zero chance of many-to-many join duplication.
             - **Read-Only SQL Audits**: Connect securely to SQLite and PostgreSQL tables without credential logging or write side-effects.
@@ -618,6 +619,10 @@ elif navigation == "🔄 Dataset Reconciliation":
                                 case_sensitive=not ignore_case,
                             )
                             st.session_state["reconcile_result"] = rec_result
+                            try:
+                                history_mgr.record_reconciliation_run(rec_result)
+                            except Exception as hist_err:
+                                logger.warning("Could not record reconciliation history: %s", hist_err)
                         except Exception as exc:
                             st.error(f"Reconciliation error: {exc}")
 
@@ -721,6 +726,9 @@ elif navigation == "🗄️ SQL Database Validation":
 
     if db_config is not None:
         if st.button("🔗 Connect & Inspect Database"):
+            st.session_state["db_engine"] = None
+            st.session_state["db_schemas"] = []
+            st.session_state["db_tables"] = []
             try:
                 with st.spinner("Connecting to database..."):
                     engine = create_safe_engine(db_config)
@@ -734,8 +742,10 @@ elif navigation == "🗄️ SQL Database Validation":
                         })
                         demo_df.to_sql("users_audit", engine, index=False)
 
+                    schemas = list_database_schemas(engine)
                     tables = list_database_tables(engine)
                     st.session_state["db_engine"] = engine
+                    st.session_state["db_schemas"] = schemas
                     st.session_state["db_tables"] = tables
                     st.success(f"Connected successfully! Found {len(tables)} tables: {tables}")
             except Exception as err:
@@ -744,29 +754,42 @@ elif navigation == "🗄️ SQL Database Validation":
     # Inspect tables if engine in session state
     saved_engine = st.session_state.get("db_engine")
     saved_tables = st.session_state.get("db_tables", [])
+    saved_schemas = st.session_state.get("db_schemas", [])
 
-    if saved_engine is not None and saved_tables:
+    if saved_engine is not None:
         st.markdown("---")
         st.markdown("### Table Inspection & Validation")
-        selected_table = st.selectbox("Select Table to Audit:", options=saved_tables)
 
-        if selected_table:
-            row_count = get_table_row_count(saved_engine, selected_table)
-            schema = inspect_table_schema(saved_engine, selected_table)
+        active_schema = None
+        if saved_schemas:
+            schema_options = ["(Default Schema)"] + saved_schemas
+            selected_schema_display = st.selectbox("Select Database Schema / Namespace:", options=schema_options)
+            if selected_schema_display != "(Default Schema)":
+                active_schema = selected_schema_display
+                saved_tables = list_database_tables(saved_engine, schema=active_schema)
 
-            t1, t2 = st.columns(2)
-            t1.metric("Table Name", selected_table)
-            t2.metric("Row Count", f"{row_count:,}")
+        if not saved_tables:
+            st.info("No tables found in the selected database/schema.")
+        else:
+            selected_table = st.selectbox("Select Table to Audit:", options=saved_tables)
 
-            st.write("**Table Schema:**")
-            st.dataframe(pd.DataFrame(schema), use_container_width=True)
+            if selected_table:
+                row_count = get_table_row_count(saved_engine, selected_table, schema=active_schema)
+                schema = inspect_table_schema(saved_engine, selected_table, schema=active_schema)
 
-            if st.button(f"📥 Load '{selected_table}' into Validator (Sample up to 10k rows)"):
-                with st.spinner("Fetching table rows..."):
-                    table_df = fetch_table_sample(saved_engine, selected_table, limit=10_000)
-                    st.session_state["current_df"] = table_df
-                    st.session_state["current_metadata"] = None
-                    st.success(f"Loaded {len(table_df):,} rows from '{selected_table}'. Go to **🛡️ Data Quality Validation** to execute checks!")
+                t1, t2 = st.columns(2)
+                t1.metric("Table Name", f"{active_schema + '.' if active_schema else ''}{selected_table}")
+                t2.metric("Row Count", f"{row_count:,}")
+
+                st.write("**Table Schema:**")
+                st.dataframe(pd.DataFrame(schema), use_container_width=True)
+
+                if st.button(f"📥 Load '{selected_table}' into Validator (Sample up to 10k rows)"):
+                    with st.spinner("Fetching table rows..."):
+                        table_df = fetch_table_sample(saved_engine, selected_table, limit=10_000, schema=active_schema)
+                        st.session_state["current_df"] = table_df
+                        st.session_state["current_metadata"] = None
+                        st.success(f"Loaded {len(table_df):,} rows from '{selected_table}'. Go to **🛡️ Data Quality Validation** to execute checks!")
 
 
 # ============================================================================
@@ -774,39 +797,86 @@ elif navigation == "🗄️ SQL Database Validation":
 # ============================================================================
 elif navigation == "📜 Validation History":
     st.subheader("📜 Validation Execution History")
-    st.caption("Persistent local SQLite audit ledger of historical validation runs.")
+    st.caption("Persistent local SQLite audit ledger of historical validation and reconciliation runs.")
 
-    history_df = history_mgr.get_history(limit=100)
+    tab_val, tab_recon = st.tabs([
+        "🛡️ Data Quality Validation Runs",
+        "🔄 Dataset Reconciliation Runs",
+    ])
 
-    if history_df.empty:
-        st.info("No validation history recorded yet. Execute checks in **🛡️ Data Quality Validation** to populate history.")
-    else:
-        st.dataframe(history_df, use_container_width=True)
+    with tab_val:
+        history_df = history_mgr.get_history(limit=100)
 
-        # Inspection of a selected run
-        run_ids = history_df["run_id"].tolist()
-        selected_run = st.selectbox("Select Run ID to Inspect Details:", options=run_ids)
+        if history_df.empty:
+            st.info("No validation history recorded yet. Execute checks in **🛡️ Data Quality Validation** to populate history.")
+        else:
+            st.dataframe(history_df, use_container_width=True)
 
-        if selected_run:
-            details = history_mgr.get_run_details(selected_run)
-            if details:
-                st.markdown(f"#### Run Details: `{selected_run}`")
-                r_c1, r_c2, r_c3, r_c4 = st.columns(4)
-                r_c1.metric("Dataset", details["dataset_name"])
-                r_c2.metric("Timestamp (UTC)", details["timestamp_utc"][:19])
-                r_c3.metric("DQ Score", f"{details['dq_score']}%")
-                r_c4.metric("Status", details["status"])
+            # Inspection of a selected run
+            run_ids = history_df["run_id"].tolist()
+            selected_run = st.selectbox("Select Run ID to Inspect Details:", options=run_ids)
 
-                st.write("**Check Breakdown:**")
-                st.dataframe(pd.DataFrame(details["checks"]), use_container_width=True)
+            if selected_run:
+                details = history_mgr.get_run_details(selected_run)
+                if details:
+                    st.markdown(f"#### Run Details: `{selected_run}`")
+                    r_c1, r_c2, r_c3, r_c4 = st.columns(4)
+                    r_c1.metric("Dataset", details["dataset_name"])
+                    r_c2.metric("Timestamp (UTC)", details["timestamp_utc"][:19])
+                    r_c3.metric("DQ Score", f"{details['dq_score']}%")
+                    r_c4.metric("Status", details["status"])
 
-        st.markdown("---")
-        with st.expander("⚠️ Clear History Audit Database"):
-            st.warning("This action permanently removes all logged validation runs from your local history database.")
-            if st.button("Permanently Clear All History", type="secondary"):
-                history_mgr.clear_history()
-                st.success("History database cleared.")
-                st.rerun()
+                    st.write("**Check Breakdown:**")
+                    st.dataframe(pd.DataFrame(details["checks"]), use_container_width=True)
+
+    with tab_recon:
+        recon_history_df = history_mgr.get_reconciliation_history(limit=100)
+
+        if recon_history_df.empty:
+            st.info("No reconciliation history recorded yet. Execute runs in **🔄 Dataset Reconciliation** to populate history.")
+        else:
+            st.dataframe(recon_history_df, use_container_width=True)
+
+            recon_run_ids = recon_history_df["run_id"].tolist()
+            selected_recon_run = st.selectbox("Select Reconciliation Run ID to Inspect Details:", options=recon_run_ids)
+
+            if selected_recon_run:
+                recon_details = history_mgr.get_reconciliation_run_details(selected_recon_run)
+                if recon_details:
+                    st.markdown(f"#### Reconciliation Run Details: `{selected_recon_run}`")
+                    status = recon_details.get("status", "UNKNOWN")
+                    if status == "FAILED":
+                        st.error("⚠️ **Status: FAILED** (Key integrity constraint failed - duplicates or null keys detected)")
+                    elif status == "MATCHED":
+                        st.success("✅ **Status: MATCHED** (100% cell-by-cell match across all common keys)")
+                    else:
+                        st.warning("⚠️ **Status: DISCREPANCIES** (Discrepancies identified between source and target)")
+
+                    rc1, rc2, rc3, rc4 = st.columns(4)
+                    rc1.metric("Source Dataset", recon_details["source_name"])
+                    rc2.metric("Target Dataset", recon_details["target_name"])
+                    rc3.metric("Match Rate", f"{recon_details['match_rate_percent']}%")
+                    rc4.metric("Status", status)
+
+                    rc5, rc6, rc7, rc8 = st.columns(4)
+                    rc5.metric("Mismatched Records", f"{recon_details['mismatched_records']:,}")
+                    rc6.metric("Source Only", f"{recon_details['source_only_records']:,}")
+                    rc7.metric("Target Only", f"{recon_details['target_only_records']:,}")
+                    rc8.metric("Row Delta", f"{recon_details['row_count_diff']:,}")
+
+                    if recon_details.get("column_mismatches"):
+                        st.write("**Column Mismatches Breakdown:**")
+                        st.dataframe(pd.DataFrame(recon_details["column_mismatches"]), use_container_width=True)
+                    else:
+                        st.success("No column-level cell discrepancies recorded for this run.")
+
+    st.markdown("---")
+    with st.expander("⚠️ Clear History Audit Database"):
+        st.warning("This action permanently removes all logged validation runs from your local history database.")
+        if st.button("Permanently Clear All History", type="secondary"):
+            history_mgr.clear_history()
+            st.success("History database cleared.")
+            st.rerun()
 
 
 # ============================================================================

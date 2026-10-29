@@ -131,6 +131,49 @@ def validate_file_safety(
             f"Unsupported file format '{ext}'. OpenDataGuard supports: {', '.join(sorted(supported_extensions))}"
         )
 
+    # Read initial bytes for magic header validation
+    header_bytes = b""
+    if isinstance(file_input, (str, Path)):
+        try:
+            with open(path, "rb") as f:
+                header_bytes = f.read(16)
+        except OSError:
+            header_bytes = b""
+    elif isinstance(file_input, io.BytesIO):
+        curr_pos = file_input.tell()
+        file_input.seek(0)
+        header_bytes = file_input.read(16)
+        file_input.seek(curr_pos)
+    elif isinstance(file_input, bytes):
+        header_bytes = file_input[:16]
+
+    if header_bytes:
+        # Reject executable binary headers disguised as dataset files
+        executable_signatures = (
+            b"MZ",  # DOS / Windows PE executable
+            b"\x7fELF",  # Linux ELF executable
+            b"\xca\xfe\xba\xbe",  # Mach-O fat binary / Java class
+            b"\xfe\xed\xfa\xce",  # Mach-O 32-bit
+            b"\xce\xfa\xed\xfe",  # Mach-O 32-bit reverse
+            b"\xfe\xed\xfa\xcf",  # Mach-O 64-bit
+            b"\xcf\xfa\xed\xfe",  # Mach-O 64-bit reverse
+        )
+        if any(header_bytes.startswith(sig) for sig in executable_signatures):
+            raise ValueError(
+                f"Security violation: File '{clean_name or 'input'}' contains a binary executable header."
+            )
+
+        if ext == ".parquet":
+            if len(header_bytes) < 4 or not header_bytes.startswith(b"PAR1"):
+                raise ValueError(
+                    f"Invalid Parquet file '{clean_name}': missing standard 'PAR1' magic header bytes."
+                )
+        elif ext == ".xlsx":
+            if len(header_bytes) < 4 or not header_bytes.startswith(b"PK\x03\x04"):
+                raise ValueError(
+                    f"Invalid Excel (.xlsx) file '{clean_name}': missing standard ZIP archive header."
+                )
+
     return ext, size_bytes
 
 
