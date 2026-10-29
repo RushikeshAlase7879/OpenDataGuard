@@ -45,6 +45,9 @@ dependencies = [
     "pydantic>=2.7.0,<3.0.0",
 ]
 
+[project.scripts]
+opendataguard = "opendataguard.cli:main"
+
 [project.optional-dependencies]
 postgres = [
     "psycopg2-binary>=2.9.9",

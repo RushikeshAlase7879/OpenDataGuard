@@ -1,5 +1,6 @@
 """OpenDataGuard: Open-Source Data Quality, Validation, and Reconciliation Platform."""
 
+from opendataguard.cli import main
 from opendataguard.database import (
     DatabaseConfig,
     create_safe_engine,
@@ -103,4 +104,6 @@ __all__ = [
     "get_history_db_path",
     "setup_logger",
     "logger",
+    # CLI
+    "main",
 ]
